@@ -9,35 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
-<<<<<<< HEAD
-    "axios": "^1.10.0",
-    "next": "15.4.2",
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
-=======
-    "bcryptjs": "^3.0.2",
-    "google-auth-library": "^10.1.0",
-    "ionicons": "^8.0.13",
-    "jose": "^6.0.12",
-    "jsonwebtoken": "^9.0.2",
-    "lucide-react": "^0.525.0",
-    "mongodb": "^6.17.0",
-    "next": "15.4.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-hot-toast": "^2.5.2",
-    "react-icons": "^5.5.0",
-    "react-infinite-scroll-component": "^6.1.0",
-    "zod": "^4.0.5"
->>>>>>> 86c97ba36463d12980c33088f0e73fe6af936a19
+    "next": "15.4.2"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-<<<<<<< HEAD
-=======
-    "@types/jsonwebtoken": "^9.0.10",
->>>>>>> 86c97ba36463d12980c33088f0e73fe6af936a19
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
