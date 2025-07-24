@@ -69,6 +69,59 @@ const ScaleButton: React.FC<ScaleButtonProps> = ({
   </motion.button>
 );
 
+// Reusable Section component
+interface SectionProps {
+  id?: string;
+  bgColor?: "primary" | "secondary";
+  children: React.ReactNode;
+  className?: string;
+}
+
+const Section: React.FC<SectionProps> = ({
+  id,
+  bgColor = "primary",
+  children,
+  className = "",
+}) => {
+  const bgClass = bgColor === "primary" ? "bg-[#1D1D1D]" : "bg-[#2A2A2A]";
+  return (
+    <section
+      id={id}
+      className={`relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 ${bgClass} py-16 snap-start ${className}`}
+    >
+      {children}
+    </section>
+  );
+};
+
+// Reusable heading component
+interface HeadingProps {
+  children: React.ReactNode;
+  subtitle?: string;
+  className?: string;
+}
+
+const Heading: React.FC<HeadingProps> = ({
+  children,
+  subtitle,
+  className = "",
+}) => (
+  <FadeInView>
+    <h2
+      className={`text-3xl sm:text-4xl lg:text-5xl font-bold text-center ${
+        subtitle ? "mb-4" : "mb-8 sm:mb-12"
+      } ${className}`}
+    >
+      {children}
+    </h2>
+    {subtitle && (
+      <p className="text-center text-gray-400 mb-8 sm:mb-12 text-base sm:text-lg">
+        {subtitle}
+      </p>
+    )}
+  </FadeInView>
+);
+
 // Constants
 const STEPS: Step[] = [
   {
@@ -158,6 +211,43 @@ const FINAL_STATS: Stat[] = [
   { icon: Globe, text: "Multi-language support" },
   { icon: Users, text: "10,000+ creators" },
 ];
+
+// Video Preview Component
+interface VideoPreviewProps {
+  title: string;
+  aspectRatio?: string;
+  duration?: string;
+}
+
+const VideoPreview: React.FC<VideoPreviewProps> = ({
+  title,
+  aspectRatio = "aspect-video",
+  duration,
+}) => (
+  <motion.div
+    whileHover={{ scale: 1.02 }}
+    className={`relative bg-[#2A2A2A] rounded-2xl overflow-hidden ${aspectRatio}`}
+  >
+    <img
+      src="https://placehold.co/600x400"
+      alt={title}
+      className="w-full h-full object-cover"
+    />
+    <motion.div
+      whileHover={{ scale: 1.1 }}
+      className="absolute inset-0 flex items-center justify-center"
+    >
+      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#D68CB8] rounded-full flex items-center justify-center">
+        <Play className="h-6 w-6 sm:h-8 sm:w-8 text-white ml-1" />
+      </div>
+    </motion.div>
+    {duration && (
+      <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 bg-black/70 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm">
+        {duration}
+      </div>
+    )}
+  </motion.div>
+);
 
 export default function Home() {
   return (
@@ -250,16 +340,9 @@ export default function Home() {
           </motion.section>
 
           {/* How It Works */}
-          <section
-            id="how-it-works"
-            className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-[#2A2A2A] py-16 snap-start"
-          >
+          <Section id="how-it-works" bgColor="secondary">
             <div className="max-w-6xl mx-auto w-full">
-              <FadeInView>
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center mb-12 sm:mb-16 text-white">
-                  How It Works
-                </h2>
-              </FadeInView>
+              <Heading>How It Works</Heading>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mb-8 sm:mb-12">
                 {STEPS.map((step, index) => (
@@ -315,13 +398,10 @@ export default function Home() {
                 ))}
               </FadeInView>
             </div>
-          </section>
+          </Section>
 
           {/* Showcase Section */}
-          <section
-            id="showcase"
-            className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-[#1D1D1D] py-16 snap-start"
-          >
+          <Section id="showcase" bgColor="primary">
             <div className="container mx-auto px-4">
               <FadeInView className="text-center mb-12 sm:mb-16">
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
@@ -342,27 +422,10 @@ export default function Home() {
                   <h3 className="text-xl sm:text-2xl font-bold mb-4 text-center">
                     Before
                   </h3>
-                  <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className="relative bg-[#2A2A2A] rounded-2xl overflow-hidden aspect-video"
-                  >
-                    <img
-                      src="https://placehold.co/600x400"
-                      alt="Long form video preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <motion.div
-                      whileHover={{ scale: 1.1 }}
-                      className="absolute inset-0 flex items-center justify-center"
-                    >
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#D68CB8] rounded-full flex items-center justify-center">
-                        <Play className="h-6 w-6 sm:h-8 sm:w-8 text-white ml-1" />
-                      </div>
-                    </motion.div>
-                    <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 bg-black/70 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm">
-                      45:32
-                    </div>
-                  </motion.div>
+                  <VideoPreview
+                    title="Long form video preview"
+                    duration="45:32"
+                  />
                 </motion.div>
 
                 <motion.div
@@ -407,24 +470,14 @@ export default function Home() {
                 </motion.div>
               </div>
             </div>
-          </section>
+          </Section>
 
           {/* Pricing Section */}
-          <section
-            id="pricing"
-            className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-[#2A2A2A] py-16 snap-start"
-          >
+          <Section id="pricing" bgColor="secondary">
             <div className="max-w-4xl mx-auto w-full">
-              <FadeInView>
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center mb-4">
-                  Simple Token Pricing
-                </h2>
-              </FadeInView>
-              <FadeInView delay={0.1}>
-                <p className="text-center text-gray-400 mb-8 sm:mb-12 text-base sm:text-lg">
-                  Pay as you grow • No subscriptions
-                </p>
-              </FadeInView>
+              <Heading subtitle="Pay as you grow • No subscriptions">
+                Simple Token Pricing
+              </Heading>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                 {PRICING_TIERS.map((tier, index) => (
@@ -483,19 +536,12 @@ export default function Home() {
                 Get 2 free tokens on sign up — no card required.
               </FadeInView>
             </div>
-          </section>
+          </Section>
 
           {/* Why Reeru */}
-          <section
-            id="features"
-            className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-[#1D1D1D] py-16 snap-start"
-          >
+          <Section id="features" bgColor="primary">
             <div className="max-w-6xl mx-auto w-full">
-              <FadeInView>
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center mb-8 sm:mb-12">
-                  Why Reeru?
-                </h2>
-              </FadeInView>
+              <Heading>Why Reeru?</Heading>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {FEATURES.map((feature, index) => (
@@ -521,17 +567,13 @@ export default function Home() {
                 ))}
               </div>
             </div>
-          </section>
+          </Section>
 
           {/* Testimonials and CTA */}
           <div className="bg-[#2A2A2A] snap-start">
             <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
               <div className="max-w-4xl mx-auto w-full">
-                <FadeInView>
-                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center mb-8 sm:mb-12 pt-10">
-                    Creators Love Reeru
-                  </h2>
-                </FadeInView>
+                <Heading className="pt-10">Creators Love Reeru</Heading>
 
                 <div className="space-y-4 sm:space-y-6">
                   {TESTIMONIALS.map((testimonial, index) => (
