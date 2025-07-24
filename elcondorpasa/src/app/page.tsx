@@ -19,8 +19,6 @@ import {
   Rocket,
   RefreshCw,
   AlertCircle,
-  Menu,
-  X,
 } from "lucide-react";
 import LoadingScreen from "@/components/LoadingScreen";
 import { Feature, PricingTier, Stat, Step, Testimonial } from "@/types";
