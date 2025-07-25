@@ -12,18 +12,7 @@ import {
   CheckCircle,
   Sparkles,
 } from "lucide-react";
-
-interface GoogleResponse {
-  credential: string;
-}
-
-interface LoginResponse {
-  message?: string;
-  user?: {
-    name?: string;
-    email?: string;
-  };
-}
+import { GoogleResponse, LoginResponse } from "@/types";
 
 declare global {
   interface Window {

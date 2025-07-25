@@ -43,3 +43,16 @@ export interface Stat {
   icon: React.ComponentType<{ className?: string }>;
   text: string;
 }
+
+//! Login and Signup Types
+export interface GoogleResponse {
+  credential: string;
+}
+
+export interface LoginResponse {
+  message?: string;
+  user?: {
+    name?: string;
+    email?: string;
+  };
+}
