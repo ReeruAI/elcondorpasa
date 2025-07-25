@@ -32,7 +32,7 @@ export default function LoadingScreen() {
     }, 100);
 
     // Animate progress bar
-    const duration = 2000; // 2 seconds total
+    const duration = 1000; // 2 seconds total
     const interval = 20; // Update every 20ms
     const increment = 100 / (duration / interval);
 
@@ -61,7 +61,7 @@ export default function LoadingScreen() {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center
+      className={`fixed inset-0 z-999 flex items-center justify-center
          transition-all duration-500 ${
            isLoading
              ? "opacity-100 translate-y-0"
@@ -116,7 +116,9 @@ export default function LoadingScreen() {
                 transform: textAnimated ? "translateX(0)" : "translateX(80px)",
               }}
             >
-              <h2 className="text-3xl font-bold text-white">Reeru.AI</h2>
+              <h2 className="text-3xl font-bold text-white">
+                <span className="text-[#D68CB8]">Reeru</span> AI
+              </h2>
             </div>
           </div>
         </div>
