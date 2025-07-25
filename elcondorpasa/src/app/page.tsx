@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import React from "react";
 import { motion } from "motion/react";
+import { useRouter } from "next/navigation";
 import {
   Play,
   Zap,
@@ -34,6 +35,7 @@ interface FadeInViewProps extends React.ComponentProps<typeof motion.div> {
 interface ScaleButtonProps extends React.ComponentProps<typeof motion.button> {
   children: React.ReactNode;
   className?: string;
+  onClick?: () => void;
 }
 
 // Reusable motion components
@@ -57,12 +59,14 @@ const FadeInView: React.FC<FadeInViewProps> = ({
 const ScaleButton: React.FC<ScaleButtonProps> = ({
   children,
   className = "",
+  onClick,
   ...props
 }) => (
   <motion.button
     whileHover={{ scale: 1.05 }}
     whileTap={{ scale: 0.95 }}
     className={className}
+    onClick={onClick}
     {...props}
   >
     {children}
@@ -250,6 +254,12 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
 );
 
 export default function Home() {
+  const router = useRouter();
+
+  const handleRegisterClick = () => {
+    router.push("/register");
+  };
+
   return (
     <>
       <LoadingScreen />
@@ -298,7 +308,10 @@ export default function Home() {
                 transition={{ duration: 0.8, delay: 0.6 }}
                 className="flex flex-col sm:flex-row gap-4 justify-center px-4"
               >
-                <ScaleButton className="group px-6 sm:px-8 py-3 sm:py-4 bg-white/10 backdrop-blur-sm rounded-full font-semibold text-base sm:text-lg hover:bg-white/20 transition-all duration-300 flex items-center justify-center gap-2">
+                <ScaleButton
+                  onClick={handleRegisterClick}
+                  className="group px-6 sm:px-8 py-3 sm:py-4 bg-white/10 backdrop-blur-sm rounded-full font-semibold text-base sm:text-lg hover:bg-white/20 transition-all duration-300 flex items-center justify-center gap-2"
+                >
                   Try for Free
                   <ArrowRight className="inline-block ml-2 w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
                 </ScaleButton>
@@ -516,6 +529,7 @@ export default function Home() {
                       {tier.desc}
                     </p>
                     <ScaleButton
+                      onClick={handleRegisterClick}
                       className={`w-full py-2.5 sm:py-3 rounded-full font-semibold text-sm sm:text-base transition-all duration-300 ${
                         tier.popular
                           ? "bg-gradient-to-r from-pink-200 to-pink-400 hover:shadow-lg hover:shadow-pink-500/50"
@@ -629,7 +643,10 @@ export default function Home() {
                 </FadeInView>
 
                 <FadeInView delay={0.4}>
-                  <ScaleButton className="group px-6 sm:px-10 py-3 sm:py-5 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full font-semibold text-base sm:text-xl hover:shadow-2xl hover:shadow-pink-400/50 transition-all duration-300 transform inline-flex items-center gap-2 sm:gap-3">
+                  <ScaleButton
+                    onClick={handleRegisterClick}
+                    className="group px-6 sm:px-10 py-3 sm:py-5 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full font-semibold text-base sm:text-xl hover:shadow-2xl hover:shadow-pink-400/50 transition-all duration-300 transform inline-flex items-center gap-2 sm:gap-3"
+                  >
                     Try Reeru Free — Get 2 Tokens Today
                     <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
                   </ScaleButton>
