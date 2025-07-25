@@ -13,26 +13,8 @@ import {
   UserPlus,
   User,
   AtSign,
-  LucideIcon,
 } from "lucide-react";
-
-// Types
-interface AuthResponse {
-  message?: string;
-  user?: {
-    name?: string;
-    email?: string;
-  };
-}
-
-interface FormField {
-  id: string;
-  name: string;
-  type: string;
-  placeholder: string;
-  label: string;
-  icon: LucideIcon;
-}
+import { AuthResponse, FormField } from "@/types";
 
 // Constants
 const GOOGLE_SCRIPT_URL = "https://accounts.google.com/gsi/client";
