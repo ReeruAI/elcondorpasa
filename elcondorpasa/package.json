@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@google/genai": "^1.11.0",
     "axios": "^1.11.0",
     "next": "15.4.2",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "zod": "^4.0.8"
   },
   "devDependencies": {
     "@types/node": "^20",
