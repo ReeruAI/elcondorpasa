@@ -1,3 +1,5 @@
+import { LucideIcon } from "lucide-react";
+
 export type NewUserType = {
   username: string;
   name: string;
@@ -13,7 +15,7 @@ export type User = {
   password: string;
 };
 
-// Landing Page Types
+//! Landing Page Types
 export interface Step {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
@@ -55,4 +57,22 @@ export interface LoginResponse {
     name?: string;
     email?: string;
   };
+}
+
+//! Register Types
+export interface AuthResponse {
+  message?: string;
+  user?: {
+    name?: string;
+    email?: string;
+  };
+}
+
+export interface FormField {
+  id: string;
+  name: string;
+  type: string;
+  placeholder: string;
+  label: string;
+  icon: LucideIcon;
 }
