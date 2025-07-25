@@ -46,6 +46,19 @@ export interface Stat {
   text: string;
 }
 
+//! Login and Signup Types
+export interface GoogleResponse {
+  credential: string;
+}
+
+export interface LoginResponse {
+  message?: string;
+  user?: {
+    name?: string;
+    email?: string;
+  };
+}
+
 //! Register Types
 export interface AuthResponse {
   message?: string;
