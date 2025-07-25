@@ -18,6 +18,8 @@ import {
   Eye,
   Loader2,
   RefreshCw,
+  Settings,
+  History,
 } from "lucide-react";
 import { ModalProps, TrendingVideo } from "@/types";
 
@@ -240,6 +242,34 @@ const VideoCard: React.FC<{
   </motion.div>
 );
 
+// Preference Setup Component
+const PreferenceSetup: React.FC = () => {
+  const router = useRouter();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-[#2A2A2A] rounded-2xl p-8 text-center"
+    >
+      <Settings className="w-16 h-16 text-[#D68CB8] mx-auto mb-4" />
+      <h3 className="text-2xl font-bold mb-3">Set Your Preferences</h3>
+      <p className="text-gray-400 mb-6 max-w-md mx-auto">
+        To get personalized AI video recommendations, please set up your content
+        preferences first.
+      </p>
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => router.push("/preferences")}
+        className="px-8 py-3 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-xl font-semibold hover:shadow-lg hover:shadow-pink-500/25 transition-all duration-300"
+      >
+        Set Your Preferences
+      </motion.button>
+    </motion.div>
+  );
+};
+
 export default function Dashboard() {
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -250,15 +280,60 @@ export default function Dashboard() {
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [trendingVideos, setTrendingVideos] =
     useState<TrendingVideo[]>(MOCK_TRENDING_VIDEOS);
+  const [historyVideos, setHistoryVideos] =
+    useState<TrendingVideo[]>(MOCK_TRENDING_VIDEOS);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasPreferences, setHasPreferences] = useState<boolean | null>(null);
+  const [loadingPreferences, setLoadingPreferences] = useState(true);
 
   const router = useRouter();
-  const sliderRef = useRef<HTMLDivElement>(null);
+  const trendingSliderRef = useRef<HTMLDivElement>(
+    null
+  ) as React.RefObject<HTMLDivElement>;
+  const historySliderRef = useRef<HTMLDivElement>(
+    null
+  ) as React.RefObject<HTMLDivElement>;
 
-  // Load trending videos (mock implementation)
+  // Check user preferences and load trending videos
   useEffect(() => {
-    // In a real implementation, this would fetch from your backend
-    setTrendingVideos(MOCK_TRENDING_VIDEOS);
+    const checkPreferencesAndLoadVideos = async () => {
+      try {
+        setLoadingPreferences(true);
+
+        // Check if user has preferences
+        const preferencesResponse = await axios.get("/api/preferences", {
+          withCredentials: true, // Ensure cookies are sent
+        });
+
+        // Use the hasPreference boolean from the API response
+        const userHasPreferences =
+          preferencesResponse.data?.hasPreference === true;
+
+        setHasPreferences(userHasPreferences);
+
+        // Only load trending videos if user has preferences
+        if (userHasPreferences) {
+          // TODO: Uncomment when /api/trending-videos is ready
+          // const trendingResponse = await axios.get("/api/trending-videos", {
+          //   withCredentials: true,
+          // });
+          // setTrendingVideos(trendingResponse.data || MOCK_TRENDING_VIDEOS);
+
+          // For now, just use mock data
+          setTrendingVideos(MOCK_TRENDING_VIDEOS);
+        }
+      } catch (error) {
+        console.error("Error checking preferences or loading videos:", error);
+        setHasPreferences(false);
+      } finally {
+        setLoadingPreferences(false);
+      }
+    };
+
+    checkPreferencesAndLoadVideos();
+
+    // Load history videos separately (mock for now)
+    setHistoryVideos(MOCK_TRENDING_VIDEOS);
   }, []);
 
   const handleSubmitUrl = async (e: React.FormEvent) => {
@@ -300,39 +375,47 @@ export default function Dashboard() {
   };
 
   const handleRefreshRecommendations = async () => {
+    if (!hasPreferences) return;
+
     setIsRefreshing(true);
 
     try {
-      // Replace with your actual API endpoint to get new recommendations
-      const response = await axios.get("/api/trending-videos");
+      // TODO: Uncomment when /api/trending-videos is ready
+      // const response = await axios.get("/api/trending-videos", {
+      //   withCredentials: true,
+      // });
+      // setTrendingVideos(response.data || MOCK_TRENDING_VIDEOS);
 
-      // For demo purposes, we'll simulate an API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // In real implementation, you would use: setTrendingVideos(response.data);
-      // For now, we'll shuffle the existing videos to simulate new recommendations
+      // For now, just shuffle mock data to simulate refresh
       const shuffled = [...MOCK_TRENDING_VIDEOS].sort(
         () => Math.random() - 0.5
       );
       setTrendingVideos(shuffled);
     } catch (error) {
       console.error("Error refreshing recommendations:", error);
-      // Handle error - show toast or error message
+      // For demo purposes, shuffle existing videos
+      const shuffled = [...MOCK_TRENDING_VIDEOS].sort(
+        () => Math.random() - 0.5
+      );
+      setTrendingVideos(shuffled);
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  const scrollSlider = (direction: "left" | "right") => {
-    if (sliderRef.current) {
+  const scrollSlider = (
+    ref: React.RefObject<HTMLDivElement>,
+    direction: "left" | "right"
+  ) => {
+    if (ref.current) {
       const scrollAmount = 340; // Card width + gap
-      const scrollLeft = sliderRef.current.scrollLeft;
+      const scrollLeft = ref.current.scrollLeft;
       const targetScroll =
         direction === "left"
           ? scrollLeft - scrollAmount
           : scrollLeft + scrollAmount;
 
-      sliderRef.current.scrollTo({
+      ref.current.scrollTo({
         left: targetScroll,
         behavior: "smooth",
       });
@@ -414,6 +497,7 @@ export default function Dashboard() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
+            className="mb-12"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -423,81 +507,89 @@ export default function Dashboard() {
                 </h2>
               </div>
 
-              <div className="flex gap-2">
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleRefreshRecommendations}
-                  disabled={isRefreshing}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
-                  title="Refresh recommendations"
-                >
-                  <RefreshCw
-                    className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""}`}
-                  />
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => scrollSlider("left")}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => scrollSlider("right")}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </motion.button>
-              </div>
-            </div>
-
-            <div className="relative">
-              <div
-                ref={sliderRef}
-                className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
-                style={{
-                  scrollbarWidth: "none",
-                  msOverflowStyle: "none",
-                  WebkitOverflowScrolling: "touch",
-                }}
-              >
-                {trendingVideos.map((video, index) => (
-                  <motion.div
-                    key={video.id}
-                    initial={{ opacity: 0, x: 50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
+              {hasPreferences && (
+                <div className="flex gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleRefreshRecommendations}
+                    disabled={isRefreshing}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
+                    title="Refresh recommendations"
                   >
-                    <VideoCard
-                      video={video}
-                      onClick={() => {
-                        setSelectedVideo(video);
-                        setShowOptionsModal(true);
-                      }}
+                    <RefreshCw
+                      className={`w-5 h-5 ${
+                        isRefreshing ? "animate-spin" : ""
+                      }`}
                     />
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Gradient fade edges */}
-              {/* <div className="absolute top-0 left-0 h-full w-20 bg-gradient-to-r from-[#1D1D1D] to-transparent pointer-events-none" />
-              <div className="absolute top-0 right-0 h-full w-20 bg-gradient-to-l from-[#1D1D1D] to-transparent pointer-events-none" /> */}
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => scrollSlider(trendingSliderRef, "left")}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => scrollSlider(trendingSliderRef, "right")}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </motion.button>
+                </div>
+              )}
             </div>
+
+            {loadingPreferences ? (
+              <div className="flex justify-center items-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-[#D68CB8]" />
+              </div>
+            ) : hasPreferences ? (
+              <div className="relative">
+                <div
+                  ref={trendingSliderRef}
+                  className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
+                  style={{
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none",
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  {trendingVideos.map((video, index) => (
+                    <motion.div
+                      key={video.id}
+                      initial={{ opacity: 0, x: 50 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <VideoCard
+                        video={video}
+                        onClick={() => {
+                          setSelectedVideo(video);
+                          setShowOptionsModal(true);
+                        }}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <PreferenceSetup />
+            )}
           </motion.div>
 
-          {/* History AI-GEN */}
+          {/* History Section */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.3 }}
           >
-            <div className="flex items-center justify-between mb-6 mt-10">
+            <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <TrendingUp className="w-6 h-6 text-[#D68CB8]" />
+                <History className="w-6 h-6 text-[#D68CB8]" />
                 <h2 className="text-xl sm:text-2xl font-semibold">History</h2>
               </div>
 
@@ -505,7 +597,7 @@ export default function Dashboard() {
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => scrollSlider("left")}
+                  onClick={() => scrollSlider(historySliderRef, "left")}
                   className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -513,7 +605,7 @@ export default function Dashboard() {
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => scrollSlider("right")}
+                  onClick={() => scrollSlider(historySliderRef, "right")}
                   className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
                 >
                   <ChevronRight className="w-5 h-5" />
@@ -523,7 +615,7 @@ export default function Dashboard() {
 
             <div className="relative">
               <div
-                ref={sliderRef}
+                ref={historySliderRef}
                 className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
                 style={{
                   scrollbarWidth: "none",
@@ -531,7 +623,7 @@ export default function Dashboard() {
                   WebkitOverflowScrolling: "touch",
                 }}
               >
-                {trendingVideos.map((video, index) => (
+                {historyVideos.map((video, index) => (
                   <motion.div
                     key={video.id}
                     initial={{ opacity: 0, x: 50 }}
@@ -548,10 +640,6 @@ export default function Dashboard() {
                   </motion.div>
                 ))}
               </div>
-
-              {/* Gradient fade edges */}
-              {/* <div className="absolute top-0 left-0 h-full w-20 bg-gradient-to-r from-[#1D1D1D] to-transparent pointer-events-none" />
-              <div className="absolute top-0 right-0 h-full w-20 bg-gradient-to-l from-[#1D1D1D] to-transparent pointer-events-none" /> */}
             </div>
           </motion.div>
         </div>
