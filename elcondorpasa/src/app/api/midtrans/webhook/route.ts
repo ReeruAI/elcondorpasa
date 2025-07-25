@@ -4,6 +4,7 @@ import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
+    console.log("Received webhook request");
     const rawBody = await req.text();
     const body = JSON.parse(rawBody);
 
