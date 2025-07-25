@@ -41,5 +41,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/preferences/:path*", "/api/profile/:path*"],
+  matcher: [
+    "/api/preferences/:path*",
+    "/api/profile/:path*",
+    "/api/midtrans/:path*",
+  ],
 };
