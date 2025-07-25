@@ -79,3 +79,22 @@ export interface FormField {
   label: string;
   icon: LucideIcon;
 }
+
+//! Dashboard Types
+export interface TrendingVideo {
+  id: string;
+  title: string;
+  thumbnail: string;
+  description: string;
+  url: string;
+  views: string;
+  duration: string;
+  channel: string;
+}
+
+export interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  video: TrendingVideo | null;
+  onGenerateClip: (url: string) => void;
+}
