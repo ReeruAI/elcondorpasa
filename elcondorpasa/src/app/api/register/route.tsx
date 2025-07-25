@@ -1,13 +1,36 @@
 import UserModel from "@/db/models/UserModel";
 import { errorHandler } from "@/helpers/errorHandler";
+import { NewUserType } from "@/types";
 
 export async function POST(req: Request) {
   try {
-    const { name, username, email, password } = await req.json();
-    const newUser = { name, username, email, password };
+    const {
+      name,
+      username,
+      email,
+      password: userPassword,
+    }: NewUserType = await req.json();
+    const newUser: NewUserType = {
+      name,
+      username,
+      email,
+      password: userPassword,
+      phone: "",
+      telegram: false,
+      reeruToken: 2,
+    };
     await UserModel.createUser(newUser);
-    const { password: _, ...userWithoutPassword } = newUser;
-    return Response.json(userWithoutPassword);
+
+    // Exclude sensitive fields from the response
+    const {
+      password,
+      phone,
+      telegram,
+      reeruToken,
+      _id,
+      ...userWithoutSensitiveData
+    } = newUser;
+    return Response.json(userWithoutSensitiveData);
   } catch (error) {
     return errorHandler(error);
   }

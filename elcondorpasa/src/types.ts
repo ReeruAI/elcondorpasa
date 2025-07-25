@@ -1,11 +1,14 @@
+import { ObjectId } from "mongodb";
+
 export type NewUserType = {
+  _id?: ObjectId; // Updated _id to use ObjectId type from MongoDB
   username: string;
   name: string;
   email: string;
   password: string;
-  googleId?: string;
-  profilePicture?: string;
-  isGoogleUser?: boolean;
+  phone: string;
+  telegram: boolean;
+  reeruToken: number;
 };
 
 export type User = {
