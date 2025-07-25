@@ -13,26 +13,8 @@ import {
   UserPlus,
   User,
   AtSign,
-  LucideIcon,
 } from "lucide-react";
-
-// Types
-interface AuthResponse {
-  message?: string;
-  user?: {
-    name?: string;
-    email?: string;
-  };
-}
-
-interface FormField {
-  id: string;
-  name: string;
-  type: string;
-  placeholder: string;
-  label: string;
-  icon: LucideIcon;
-}
+import { AuthResponse, FormField } from "@/types";
 
 // Constants
 const GOOGLE_SCRIPT_URL = "https://accounts.google.com/gsi/client";
@@ -179,9 +161,6 @@ const GoogleButton: React.FC<{
   isLoading: boolean;
   onClick?: () => void;
 }> = ({ isLoaded, isLoading, onClick }) => {
-  const buttonId = "google-signup-button";
-  const hasIframe = isLoaded && document.querySelector(`#${buttonId} iframe`);
-
   return (
     <>
       {!isLoaded && (
@@ -193,14 +172,15 @@ const GoogleButton: React.FC<{
       )}
 
       <div
-        id={buttonId}
+        id="google-signup-button"
         className={`${!isLoaded ? "hidden" : ""} ${
           isLoading ? "opacity-50 pointer-events-none" : ""
         } w-full flex justify-center`}
         style={{ minHeight: "44px" }}
       />
 
-      {isLoaded && !hasIframe && (
+      {/* Fallback Google button if the official one doesn't render */}
+      {isLoaded && !document.querySelector("#google-signup-button iframe") && (
         <motion.button
           variants={scaleVariants}
           initial="idle"
@@ -300,14 +280,17 @@ export default function RegisterPage() {
   const handleAuthResponse = useCallback(
     (data: AuthResponse, source: "google" | "regular") => {
       const userName = data.user?.name || data.user?.email;
+      const redirectPath = source === "google" ? "/dashboard" : "/login";
+
       setStatus({
         error: "",
         success:
           source === "google"
             ? `Welcome ${userName}!`
-            : "Account created successfully!",
+            : "Account created successfully! Please login to continue.",
       });
-      setTimeout(() => router.push("/dashboard"), REDIRECT_DELAY);
+
+      setTimeout(() => router.push(redirectPath), REDIRECT_DELAY);
     },
     [router]
   );
@@ -330,12 +313,9 @@ export default function RegisterPage() {
       setStatus({ error: "", success: "" });
 
       try {
-        const { data } = await axios.post<AuthResponse>(
-          "/api/auth/google-register",
-          {
-            googleToken: response.credential,
-          }
-        );
+        const { data } = await axios.post<AuthResponse>("/api/auth/google", {
+          googleToken: response.credential,
+        });
         handleAuthResponse(data, "google");
       } catch (error) {
         handleAuthError(error, "Google registration failed");
@@ -354,10 +334,12 @@ export default function RegisterPage() {
     document.body.appendChild(script);
 
     script.onload = () => {
+      console.log("Google script loaded");
       setIsGoogleLoaded(true);
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
       if (window.google && clientId) {
+        console.log("Initializing Google Sign-In with ID:", clientId);
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: handleGoogleResponse,
@@ -373,6 +355,12 @@ export default function RegisterPage() {
             width: "100%",
           }
         );
+        console.log("Google button rendered");
+      } else {
+        console.error("Missing Google or Client ID", {
+          hasGoogle: !!window.google,
+          hasClientId: !!clientId,
+        });
       }
     };
 
