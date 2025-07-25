@@ -61,7 +61,7 @@ export default function LoadingScreen() {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center
+      className={`fixed inset-0 z-999 flex items-center justify-center
          transition-all duration-500 ${
            isLoading
              ? "opacity-100 translate-y-0"
