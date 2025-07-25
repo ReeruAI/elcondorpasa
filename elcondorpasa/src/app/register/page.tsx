@@ -300,14 +300,17 @@ export default function RegisterPage() {
   const handleAuthResponse = useCallback(
     (data: AuthResponse, source: "google" | "regular") => {
       const userName = data.user?.name || data.user?.email;
+      const redirectPath = source === "google" ? "/dashboard" : "/login";
+
       setStatus({
         error: "",
         success:
           source === "google"
             ? `Welcome ${userName}!`
-            : "Account created successfully!",
+            : "Account created successfully! Please login to continue.",
       });
-      setTimeout(() => router.push("/dashboard"), REDIRECT_DELAY);
+
+      setTimeout(() => router.push(redirectPath), REDIRECT_DELAY);
     },
     [router]
   );
