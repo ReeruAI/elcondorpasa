@@ -1,5 +1,4 @@
 import { LucideIcon } from "lucide-react";
-
 import { ObjectId } from "mongodb";
 
 export type NewUserType = {
@@ -17,6 +16,36 @@ export type User = {
   emailUsername: string;
   password: string;
 };
+
+//! Database Models
+export interface UserModel {
+  _id?: ObjectId;
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+  phone: string;
+  telegram: boolean;
+  reeruToken: number;
+}
+
+export interface Package {
+  _id?: ObjectId;
+  name: string;
+  reeruToken: number;
+  price: number;
+}
+
+export interface Transaction {
+  _id?: ObjectId;
+  packageId: ObjectId;
+  userId: ObjectId;
+  status: "pending" | "paid" | "failed" | "expired";
+  amount: number;
+  order_id?: string;
+  created_at: Date;
+  updated_at: Date;
+}
 
 //! Landing Page Types
 export interface Step {
