@@ -132,6 +132,7 @@ export const config = {
     // API routes that require authentication
     "/api/preferences/:path*",
     "/api/profile/:path*",
+    "/api/history/:path*",
     // API routes with optional authentication
     "/api/gemini/:path*",
     "/api/midtrans/:path*",
