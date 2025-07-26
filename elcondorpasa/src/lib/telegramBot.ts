@@ -1,3 +1,5 @@
+// telegramBot.ts
+// This file should only be imported in Node.js runtime
 import TelegramBot from "node-telegram-bot-api";
 import CronService from "@/lib/cronService";
 import axios from "axios";
