@@ -6,9 +6,23 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! }); // the `!` 
 /**
  * Clean up common JSON issues from AI-generated output:
  * - Removes trailing commas (before `]` or `}`)
+ * - Fixes escaped quotes in strings
+ * - Removes any BOM or special characters
  */
 function sanitizeJsonString(str: string): string {
-  return str.replace(/,\s*([\]{}])/g, "$1");
+  // Remove BOM if present
+  let cleaned = str.replace(/^\uFEFF/, "");
+
+  // Remove trailing commas
+  cleaned = cleaned.replace(/,\s*([\]{}])/g, "$1");
+
+  // Fix common quote escaping issues
+  cleaned = cleaned.replace(/\\'/g, "'");
+
+  // Remove any control characters
+  cleaned = cleaned.replace(/[\x00-\x1F\x7F-\x9F]/g, "");
+
+  return cleaned;
 }
 
 /**
@@ -22,7 +36,7 @@ export async function generateStructured<T = any>(
   responseSchema: object
 ): Promise<T> {
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.0-flash-exp",
     contents: promptText,
     config: {
       responseMimeType: "application/json",
@@ -31,10 +45,23 @@ export async function generateStructured<T = any>(
   });
 
   const raw = response.text;
+
+  if (!raw) {
+    console.error("❌ Gemini returned empty response");
+    throw {
+      name: "GeminiOutputParseError",
+      message: "Gemini returned empty response",
+      original: new Error("Empty response"),
+    };
+  }
+
   try {
-    return JSON.parse(sanitizeJsonString(raw ?? "")) as T;
+    const sanitized = sanitizeJsonString(raw);
+    return JSON.parse(sanitized) as T;
   } catch (err) {
     console.error("❌ Failed to parse Gemini response:", raw);
+    console.error("❌ Sanitized version:", sanitizeJsonString(raw));
+    console.error("❌ Parse error:", err);
     throw {
       name: "GeminiOutputParseError",
       message: "Gemini returned invalid JSON format. Could not parse.",
@@ -141,10 +168,10 @@ Requirements:
 - Respond only with the final search lines, no explanation
 
 Example output for contentPreference = "tech", languagePreference = "English":
-podcast 2025 ai  
-podcast 2025 openai  
-podcast 2025 lex fridman  
-podcast 2025 startups  
+podcast 2025 ai
+podcast 2025 openai
+podcast 2025 lex fridman
+podcast 2025 startups
 podcast 2025 tech news`;
 
   const response = await ai.models.generateContent({
@@ -247,12 +274,12 @@ function parseDurationToMinutes(duration: string): number {
  * Enhanced YouTube podcast search with Gemini analysis and streaming
  * @param contentPreference - The content preference for searching
  * @param languagePreference - The language preference
- * @returns AsyncGenerator that yields analysis and JSON chunks
+ * @returns AsyncGenerator that yields analysis and individual video objects
  */
 export async function* generateYouTubePodcastStream(
   contentPreference: string,
   languagePreference: string
-): AsyncGenerator<string, void, unknown> {
+): AsyncGenerator<string | { type: "video"; data: any }, void, unknown> {
   try {
     // Step 1: Generate smart search queries with Gemini
     yield `🧠 Generating smart search queries for ${contentPreference} content in ${languagePreference}...\n\n`;
@@ -345,129 +372,103 @@ export async function* generateYouTubePodcastStream(
 
     yield `🤖 Analyzing videos with Gemini for insights...\n\n`;
 
-    const analysisPrompt = `Analyze these YouTube podcast videos and provide reasoning why each is interesting and relevant for someone interested in ${contentPreference} content.
+    // Step 5: Analyze each video individually with Gemini
+    yield `--- Starting Gemini Analysis ---\n`;
 
-Videos to analyze:
-${topVideos
-  .map(
-    (video, index) => `
-${index + 1}. "${video.title}" by ${video.creator}
-   Views: ${video.viewCount.toLocaleString()}
-   Duration: ${Math.floor(parseDurationToMinutes(video.duration))} minutes
-   Description: ${video.description.substring(0, 200)}...
-`
-  )
-  .join("\n")}
+    const analyzedVideos = [];
 
-For each video, provide:
-1. Why it's interesting (focus on the host/guest expertise, trending topics, unique insights)
+    // Analyze videos one by one for better reliability
+    for (let i = 0; i < topVideos.length; i++) {
+      const video = topVideos[i];
+
+      try {
+        yield `🤖 Analyzing video ${i + 1}/${topVideos.length}: "${
+          video.title
+        }"...\n`;
+
+        const singleVideoPrompt = `Analyze this YouTube podcast video and explain why it's interesting and relevant for someone interested in ${contentPreference} content.
+
+Video details:
+- Title: "${video.title}"
+- Creator: ${video.creator}
+- Views: ${video.viewCount.toLocaleString()}
+- Duration: ${Math.floor(parseDurationToMinutes(video.duration))} minutes
+- Description: ${video.description.substring(0, 200)}...
+
+Provide a compelling explanation (2-3 sentences) covering:
+1. Why it's interesting (host/guest expertise, trending topics, unique insights)
 2. What makes it valuable for ${contentPreference} enthusiasts
-3. Key appeal factors (e.g., "Jensen Huang is CEO of NVIDIA", "covers latest AI developments", etc.)
+3. Key appeal factors
 
-Return as JSON with this structure:
-{
-  "videos": [
-    {
-      "title": "exact title",
-      "creator": "exact creator", 
-      "thumbnailUrl": "exact thumbnail URL",
-      "videoUrl": "exact video URL",
-      "viewCount": actual_number,
-      "duration": "X minutes",
-      "reasoning": "detailed explanation of why this video is interesting and relevant"
-    }
-  ]
-}`;
+Respond with ONLY the reasoning text, no JSON formatting.`;
 
-    const responseSchema = {
-      type: "object",
-      properties: {
-        videos: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              creator: { type: "string" },
-              thumbnailUrl: { type: "string" },
-              videoUrl: { type: "string" },
-              viewCount: { type: "number" },
-              duration: { type: "string" },
-              reasoning: { type: "string" },
-            },
-            required: [
-              "title",
-              "creator",
-              "thumbnailUrl",
-              "videoUrl",
-              "viewCount",
-              "duration",
-              "reasoning",
-            ],
-          },
-          maxItems: 5,
-        },
-      },
-      required: ["videos"],
-    };
+        const reasoningResponse = await ai.models.generateContent({
+          model: "gemini-2.0-flash-exp",
+          contents: singleVideoPrompt,
+        });
 
-    // Step 5: Stream Gemini's analysis
-    yield `--- Gemini Analysis Results ---\n`;
+        const reasoning =
+          reasoningResponse.text?.trim() ||
+          `This video from ${
+            video.creator
+          } has garnered ${video.viewCount.toLocaleString()} views, indicating strong viewer interest in ${contentPreference} content. The ${Math.floor(
+            parseDurationToMinutes(video.duration)
+          )}-minute duration suggests comprehensive coverage of the topic.`;
 
-    const analysisStream = await ai.models.generateContentStream({
-      model: "gemini-2.5-flash",
-      contents: analysisPrompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema,
-      },
-    });
+        const finalVideo = {
+          title: video.title,
+          creator: video.creator,
+          thumbnailUrl: video.thumbnailUrl,
+          videoUrl: video.videoUrl,
+          viewCount: video.viewCount,
+          duration: `${Math.floor(
+            parseDurationToMinutes(video.duration)
+          )} minutes`,
+          reasoning: reasoning,
+        };
 
-    let analysisContent = "";
-    for await (const chunk of analysisStream) {
-      const text = chunk.text;
-      if (text) {
-        analysisContent += text;
-        yield text;
+        analyzedVideos.push(finalVideo);
+
+        // Stream the video immediately after analysis
+        yield {
+          type: "video",
+          data: finalVideo,
+        };
+
+        // Small delay for streaming effect
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (error) {
+        console.error(`Failed to analyze video ${i + 1}:`, error);
+
+        // Use fallback reasoning
+        const fallbackVideo = {
+          title: video.title,
+          creator: video.creator,
+          thumbnailUrl: video.thumbnailUrl,
+          videoUrl: video.videoUrl,
+          viewCount: video.viewCount,
+          duration: `${Math.floor(
+            parseDurationToMinutes(video.duration)
+          )} minutes`,
+          reasoning: `This trending video from ${
+            video.creator
+          } has attracted ${video.viewCount.toLocaleString()} views. As a ${Math.floor(
+            parseDurationToMinutes(video.duration)
+          )}-minute ${contentPreference.toLowerCase()} content piece, it offers substantial value for enthusiasts seeking quality podcast content.`,
+        };
+
+        analyzedVideos.push(fallbackVideo);
+
+        yield {
+          type: "video",
+          data: fallbackVideo,
+        };
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
       }
     }
 
-    // Fill in the actual data from our API results
-    try {
-      const analysisResult = JSON.parse(analysisContent);
-      const finalVideos = analysisResult.videos.map(
-        (analyzedVideo: any, index: number) => {
-          const originalVideo = topVideos[index];
-          return {
-            ...analyzedVideo,
-            title: originalVideo.title,
-            creator: originalVideo.creator,
-            thumbnailUrl: originalVideo.thumbnailUrl,
-            videoUrl: originalVideo.videoUrl,
-            viewCount: originalVideo.viewCount,
-            duration: `${Math.floor(
-              parseDurationToMinutes(originalVideo.duration)
-            )} minutes`,
-          };
-        }
-      );
-
-      // Stream the final corrected JSON
-      yield `\n--- Final Results with Real Data ---\n`;
-      const finalResponse = { videos: finalVideos };
-      const finalJson = JSON.stringify(finalResponse, null, 2);
-
-      const chunkSize = 100;
-      for (let i = 0; i < finalJson.length; i += chunkSize) {
-        const chunk = finalJson.slice(i, i + chunkSize);
-        yield chunk;
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-    } catch (parseError) {
-      yield `\n❌ Error parsing analysis: ${
-        parseError instanceof Error ? parseError.message : "Unknown error"
-      }\n`;
-    }
+    yield `\n✅ Analysis complete. Streamed ${analyzedVideos.length} videos.\n`;
   } catch (error) {
     console.error("❌ Enhanced YouTube streaming error:", error);
     yield `\n❌ Error: ${
