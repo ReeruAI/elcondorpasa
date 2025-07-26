@@ -114,5 +114,7 @@ export const config = {
     // API routes
     "/api/preferences/:path*",
     "/api/profile/:path*",
+    "/api/gemini/:path*",
+    "/api/midtrans/:path*",
   ],
 };

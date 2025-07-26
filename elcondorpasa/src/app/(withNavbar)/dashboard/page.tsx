@@ -285,6 +285,12 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasPreferences, setHasPreferences] = useState<boolean | null>(null);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [isStreamingVideos, setIsStreamingVideos] = useState(false);
+  const [userPreferences, setUserPreferences] = useState<{
+    contentPreference?: string;
+    languagePreference?: string;
+  }>({});
 
   const router = useRouter();
   const trendingSliderRef = useRef<HTMLDivElement>(
@@ -302,28 +308,167 @@ export default function Dashboard() {
 
         // Check if user has preferences
         const preferencesResponse = await axios.get("/api/preferences", {
-          withCredentials: true, // Ensure cookies are sent
+          withCredentials: true,
         });
 
-        // Use the hasPreference boolean from the API response
         const userHasPreferences =
           preferencesResponse.data?.hasPreference === true;
-
         setHasPreferences(userHasPreferences);
 
-        // Only load trending videos if user has preferences
-        if (userHasPreferences) {
-          // TODO: Uncomment when /api/trending-videos is ready
-          // const trendingResponse = await axios.get("/api/trending-videos", {
-          //   withCredentials: true,
-          // });
-          // setTrendingVideos(trendingResponse.data || MOCK_TRENDING_VIDEOS);
+        if (userHasPreferences && preferencesResponse.data?.preference) {
+          const { contentPreference, languagePreference } =
+            preferencesResponse.data.preference;
+          setUserPreferences({ contentPreference, languagePreference });
 
-          // For now, just use mock data
-          setTrendingVideos(MOCK_TRENDING_VIDEOS);
+          console.log(
+            "User Preferences:",
+            contentPreference,
+            languagePreference
+          );
+
+          if (contentPreference && languagePreference) {
+            // Start streaming from Gemini API
+            setIsStreamingVideos(true);
+            setStreamingMessage("🧠 Initializing AI recommendation engine...");
+
+            // Declare accumulatedMessage outside the try block
+            let accumulatedMessage = "";
+
+            try {
+              // Clear any previous messages
+              setStreamingMessage("");
+              accumulatedMessage = "";
+
+              const response = await fetch("/api/gemini", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({
+                  contentPreference,
+                  languagePreference,
+                }),
+              });
+
+              if (!response.ok) {
+                throw new Error("Failed to fetch recommendations");
+              }
+
+              const reader = response.body?.getReader();
+              const decoder = new TextDecoder();
+
+              if (reader) {
+                let buffer = "";
+
+                // Process stream chunk by chunk
+                const processStream = async () => {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    // Decode the chunk
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+
+                    // Process all complete lines in the buffer
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+                    for (const line of lines) {
+                      if (line.trim() === "") continue; // Skip empty lines
+
+                      if (line.startsWith("data: ")) {
+                        const data = line.slice(6).trim();
+
+                        if (data === "[DONE]") {
+                          setIsStreamingVideos(false);
+                          setStreamingMessage("");
+                          continue;
+                        }
+
+                        try {
+                          const parsed = JSON.parse(data);
+
+                          // Handle different types of streaming data
+                          if (parsed.analysisComplete) {
+                            // When analysis is complete, show a special message
+                            setStreamingMessage(parsed.message);
+                            // Force state update
+                            await new Promise((resolve) =>
+                              setTimeout(resolve, 0)
+                            );
+                          } else if (parsed.isFinalJson) {
+                            // This is part of the final JSON, accumulate it but don't display
+                            setStreamingMessage(
+                              "📊 Processing final results..."
+                            );
+                            // Force state update
+                            await new Promise((resolve) =>
+                              setTimeout(resolve, 0)
+                            );
+                          } else if (parsed.chunk && !parsed.isFinalJson) {
+                            // This is progress text, display it immediately
+                            if (parsed.progressType === "queryGeneration") {
+                              accumulatedMessage = "";
+                            }
+                            accumulatedMessage += parsed.chunk;
+                            setStreamingMessage(accumulatedMessage);
+                            // Force state update
+                            await new Promise((resolve) =>
+                              setTimeout(resolve, 0)
+                            );
+                          }
+
+                          // Handle final video data
+                          if (parsed.final && parsed.data?.videos) {
+                            setTrendingVideos(
+                              parsed.data.videos.map((video: any) => ({
+                                id:
+                                  video.videoUrl.split("v=")[1] ||
+                                  Math.random().toString(),
+                                title: video.title,
+                                thumbnail: video.thumbnailUrl,
+                                description: video.reasoning,
+                                url: video.videoUrl,
+                                views:
+                                  typeof video.viewCount === "number"
+                                    ? video.viewCount > 1000000
+                                      ? (video.viewCount / 1000000).toFixed(1) +
+                                        "M"
+                                      : video.viewCount > 1000
+                                      ? (video.viewCount / 1000).toFixed(1) +
+                                        "K"
+                                      : video.viewCount.toString()
+                                    : video.viewCount,
+                                duration: video.duration,
+                                channel: video.creator,
+                              }))
+                            );
+                            setIsStreamingVideos(false);
+                            setStreamingMessage("");
+                          }
+                        } catch (e) {
+                          console.error("Error parsing streaming data:", e);
+                        }
+                      }
+                    }
+                  }
+                };
+
+                await processStream();
+              }
+            } catch (error) {
+              console.error("Error streaming videos:", error);
+              setIsStreamingVideos(false);
+              setStreamingMessage("");
+              // Fallback to mock data
+              setTrendingVideos(MOCK_TRENDING_VIDEOS);
+            }
+          }
         }
       } catch (error) {
-        console.error("Error checking preferences or loading videos:", error);
+        console.error("Error checking preferences:", error);
         setHasPreferences(false);
       } finally {
         setLoadingPreferences(false);
@@ -375,28 +520,129 @@ export default function Dashboard() {
   };
 
   const handleRefreshRecommendations = async () => {
-    if (!hasPreferences) return;
+    if (
+      !hasPreferences ||
+      !userPreferences.contentPreference ||
+      !userPreferences.languagePreference
+    )
+      return;
 
     setIsRefreshing(true);
+    setIsStreamingVideos(true);
+    setStreamingMessage("🔄 Refreshing recommendations...");
+    setTrendingVideos([]); // Clear existing videos
 
     try {
-      // TODO: Uncomment when /api/trending-videos is ready
-      // const response = await axios.get("/api/trending-videos", {
-      //   withCredentials: true,
-      // });
-      // setTrendingVideos(response.data || MOCK_TRENDING_VIDEOS);
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          contentPreference: userPreferences.contentPreference,
+          languagePreference: userPreferences.languagePreference,
+        }),
+      });
 
-      // For now, just shuffle mock data to simulate refresh
-      const shuffled = [...MOCK_TRENDING_VIDEOS].sort(
-        () => Math.random() - 0.5
-      );
-      setTrendingVideos(shuffled);
+      if (!response.ok) {
+        throw new Error("Failed to fetch recommendations");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        let buffer = "";
+        let accumulatedMessage = "";
+
+        // Process stream chunk by chunk
+        const processStream = async () => {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // Decode the chunk
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+
+            // Process all complete lines in the buffer
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (line.trim() === "") continue; // Skip empty lines
+
+              if (line.startsWith("data: ")) {
+                const data = line.slice(6).trim();
+
+                if (data === "[DONE]") {
+                  setIsStreamingVideos(false);
+                  setStreamingMessage("");
+                  continue;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+
+                  // Handle different types of streaming data
+                  if (parsed.analysisComplete) {
+                    setStreamingMessage(parsed.message);
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                  } else if (parsed.isFinalJson) {
+                    setStreamingMessage("📊 Processing final results...");
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                  } else if (parsed.chunk && !parsed.isFinalJson) {
+                    if (parsed.progressType === "queryGeneration") {
+                      accumulatedMessage = "";
+                    }
+                    accumulatedMessage += parsed.chunk;
+                    setStreamingMessage(accumulatedMessage);
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                  }
+
+                  // Handle final video data
+                  if (parsed.final && parsed.data?.videos) {
+                    setTrendingVideos(
+                      parsed.data.videos.map((video: any) => ({
+                        id:
+                          video.videoUrl.split("v=")[1] ||
+                          Math.random().toString(),
+                        title: video.title,
+                        thumbnail: video.thumbnailUrl,
+                        description: video.reasoning,
+                        url: video.videoUrl,
+                        views:
+                          typeof video.viewCount === "number"
+                            ? video.viewCount > 1000000
+                              ? (video.viewCount / 1000000).toFixed(1) + "M"
+                              : video.viewCount > 1000
+                              ? (video.viewCount / 1000).toFixed(1) + "K"
+                              : video.viewCount.toString()
+                            : video.viewCount,
+                        duration: video.duration,
+                        channel: video.creator,
+                      }))
+                    );
+                    setIsStreamingVideos(false);
+                    setStreamingMessage("");
+                  }
+                } catch (e) {
+                  console.error("Error parsing streaming data:", e);
+                }
+              }
+            }
+          }
+        };
+
+        await processStream();
+      }
     } catch (error) {
       console.error("Error refreshing recommendations:", error);
-      // For demo purposes, shuffle existing videos
-      const shuffled = [...MOCK_TRENDING_VIDEOS].sort(
-        () => Math.random() - 0.5
-      );
+      setIsStreamingVideos(false);
+      setStreamingMessage("");
+      // Fallback to shuffling existing videos
+      const shuffled = [...trendingVideos].sort(() => Math.random() - 0.5);
       setTrendingVideos(shuffled);
     } finally {
       setIsRefreshing(false);
@@ -546,6 +792,27 @@ export default function Dashboard() {
             {loadingPreferences ? (
               <div className="flex justify-center items-center h-64">
                 <Loader2 className="w-8 h-8 animate-spin text-[#D68CB8]" />
+              </div>
+            ) : isStreamingVideos ? (
+              <div className="bg-[#2A2A2A] rounded-2xl p-8">
+                <div className="flex items-center justify-center mb-6">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
+                    className="w-16 h-16"
+                  >
+                    <Sparkles className="w-full h-full text-[#D68CB8]" />
+                  </motion.div>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
+                    {streamingMessage}
+                  </pre>
+                </div>
               </div>
             ) : hasPreferences ? (
               <div className="relative">
