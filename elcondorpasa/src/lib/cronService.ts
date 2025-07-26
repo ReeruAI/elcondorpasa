@@ -26,7 +26,7 @@ class CronService {
   // Daily reminder - setiap hari jam 9 pagi
   startDailyReminder() {
     const job = cron.schedule(
-      "* * * * *", // Run every minute for testing
+      "* 10 * * *", // Run every minute for testing
       async () => {
         await this.sendDailyReminder();
       },

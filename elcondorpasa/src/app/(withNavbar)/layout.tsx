@@ -8,7 +8,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Navbar />
+        <div className="pb-20">
+          <Navbar />
+        </div>
         {/* Main content area */}
         <main className="">{children}</main>
       </body>

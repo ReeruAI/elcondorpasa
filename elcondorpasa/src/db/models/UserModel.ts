@@ -235,6 +235,8 @@ class UserModel {
       {
         projection: {
           password: 0, // Exclude password
+          phone: 0, // Exclude phone
+          telegram: 0, // Exclude telegram status
         },
       }
     );
