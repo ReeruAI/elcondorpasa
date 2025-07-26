@@ -6,6 +6,7 @@ import { verifyToken } from "./helpers/jwt";
 const PROTECTED_ROUTES = ["/dashboard", "/preferences"];
 const AUTH_ROUTES = ["/login", "/register"];
 const API_ROUTES = ["/api/preferences", "/api/profile"];
+const OPTIONAL_AUTH_ROUTES = ["/api/gemini", "/api/midtrans"];
 
 export async function middleware(request: NextRequest) {
   try {
@@ -18,6 +19,9 @@ export async function middleware(request: NextRequest) {
     );
     const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route));
     const isApiRoute = API_ROUTES.some((route) => pathname.startsWith(route));
+    const isOptionalAuthRoute = OPTIONAL_AUTH_ROUTES.some((route) =>
+      pathname.startsWith(route)
+    );
 
     // Handle unauthenticated users
     if (!token) {
@@ -27,6 +31,11 @@ export async function middleware(request: NextRequest) {
 
       if (isApiRoute) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      // For optional auth routes, continue without userId
+      if (isOptionalAuthRoute) {
+        return NextResponse.next();
       }
 
       // Allow access to auth routes and other public routes
@@ -45,6 +54,15 @@ export async function middleware(request: NextRequest) {
 
       if (isApiRoute) {
         return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+      }
+
+      // For optional auth routes, continue without userId even if token is invalid
+      if (isOptionalAuthRoute) {
+        console.error(
+          "Invalid token, continuing without auth:",
+          verificationResult.error
+        );
+        return NextResponse.next();
       }
 
       return NextResponse.next();
@@ -111,9 +129,10 @@ export const config = {
     // Auth routes
     "/login",
     "/register",
-    // API routes
+    // API routes that require authentication
     "/api/preferences/:path*",
     "/api/profile/:path*",
+    // API routes with optional authentication
     "/api/gemini/:path*",
     "/api/midtrans/:path*",
   ],

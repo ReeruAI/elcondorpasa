@@ -1,0 +1,159 @@
+// src/lib/notificationService.ts
+import TelegramBotManager from "@/lib/telegramBotManager";
+import UserModel from "@/db/models/UserModel";
+
+class NotificationService {
+  /**
+   * Kirim notifikasi ke user berdasarkan User ID
+   */
+  static async notifyUser(
+    userId: string,
+    message: string,
+    type: "info" | "success" | "warning" | "error" = "info"
+  ): Promise<boolean> {
+    try {
+      // Get user dari database
+      const user = await UserModel.getUserProfile(userId);
+
+      if (!user.telegramChatId) {
+        console.log(`❌ User ${userId} doesn't have Telegram connected`);
+        return false;
+      }
+
+      // Format message berdasarkan type
+      let formattedMessage = message;
+      switch (type) {
+        case "success":
+          formattedMessage = `✅ ${message}`;
+          break;
+        case "warning":
+          formattedMessage = `⚠️ ${message}`;
+          break;
+        case "error":
+          formattedMessage = `❌ ${message}`;
+          break;
+        case "info":
+        default:
+          formattedMessage = `ℹ️ ${message}`;
+          break;
+      }
+
+      const botManager = TelegramBotManager.getInstance();
+      const bot = await botManager.getBot();
+      if (!bot) {
+        console.log("❌ Bot not available");
+        return false;
+      }
+      await bot.sendMessage(user.telegramChatId, formattedMessage, {
+        parse_mode: "Markdown",
+      });
+      console.log(`✅ Notification sent to ${user.telegramChatId}`);
+      return true;
+    } catch (error: any) {
+      console.log("❌ Notification service error:", error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Broadcast ke semua user yang connect Telegram
+   */
+  static async broadcastToAll(
+    message: string,
+    type: "info" | "announcement" | "maintenance" = "info"
+  ): Promise<{ success: number; failed: number; total: number } | false> {
+    try {
+      const telegramUsers = await UserModel.getAllTelegramUsers();
+
+      let formattedMessage = message;
+      switch (type) {
+        case "announcement":
+          formattedMessage = `📢 *Pengumuman*\n\n${message}`;
+          break;
+        case "maintenance":
+          formattedMessage = `🔧 *Maintenance Notice*\n\n${message}`;
+          break;
+        default:
+          formattedMessage = message;
+      }
+
+      const results = {
+        success: 0,
+        failed: 0,
+        total: telegramUsers.length,
+      };
+
+      const botManager = TelegramBotManager.getInstance();
+
+      for (const user of telegramUsers) {
+        try {
+          const sent = await botManager.sendNotification(
+            user.telegramChatId,
+            formattedMessage
+          );
+          if (sent) {
+            results.success++;
+          } else {
+            results.failed++;
+          }
+
+          // Add delay to avoid rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } catch (error) {
+          results.failed++;
+          console.error(`Failed to send to user ${user._id}:`, error);
+        }
+      }
+
+      console.log(
+        `📊 Broadcast complete: ${results.success}/${results.total} sent`
+      );
+      return results;
+    } catch (error: any) {
+      console.log("❌ Broadcast service error:", error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Kirim notifikasi token update
+   */
+  static async notifyTokenUpdate(
+    userId: string,
+    oldTokens: number,
+    newTokens: number
+  ): Promise<boolean> {
+    const difference = newTokens - oldTokens;
+    const icon = difference >= 0 ? "📈" : "📉";
+    const action = difference >= 0 ? "bertambah" : "berkurang";
+
+    const message =
+      `${icon} *Token Update*\n\n` +
+      `Token Reeru Anda ${action}:\n` +
+      `• Sebelumnya: ${oldTokens} token\n` +
+      `• Sekarang: ${newTokens} token\n` +
+      `• Perubahan: ${difference >= 0 ? "+" : ""}${difference} token`;
+
+    return await this.notifyUser(userId, message, "info");
+  }
+
+  /**
+   * Kirim welcome message untuk user baru yang connect Telegram
+   */
+  static async sendWelcomeMessage(userId: string): Promise<boolean> {
+    const user = await UserModel.getUserProfile(userId);
+
+    const message =
+      `🎉 *Selamat datang, ${user.name}!*\n\n` +
+      `Akun Telegram Anda telah berhasil terhubung dengan Reeru.\n\n` +
+      `Anda akan menerima notifikasi untuk:\n` +
+      `🔔 Update penting akun\n` +
+      `📊 Status token Reeru\n` +
+      `🎯 Aktivitas sistem\n` +
+      `📢 Pengumuman terbaru`;
+
+    return await this.notifyUser(userId, message, "success");
+  }
+}
+
+export default NotificationService;

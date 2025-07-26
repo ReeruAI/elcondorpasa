@@ -2,13 +2,15 @@ import { LucideIcon } from "lucide-react";
 import { ObjectId } from "mongodb";
 
 export type NewUserType = {
-  _id?: ObjectId; // Updated _id to use ObjectId type from MongoDB
+  _id?: ObjectId;
   username: string;
   name: string;
   email: string;
   password: string;
   phone: string;
   telegram: boolean;
+  telegramChatId?: number; // Chat ID dari Telegram
+  telegramUsername?: string; // Username Telegram (optional)
   reeruToken: number;
 };
 
@@ -107,6 +109,15 @@ export interface FormField {
   placeholder: string;
   label: string;
   icon: LucideIcon;
+}
+
+declare module "node-telegram-bot-api" {
+  export default class TelegramBot {
+    constructor(token: string, options: { polling?: boolean });
+    on(event: string, callback: (msg: any) => void): void;
+    onText(regex: RegExp, callback: (msg: any) => void): void;
+    sendMessage(chatId: number, text: string, options?: any): Promise<any>;
+  }
 }
 
 //! Dashboard Types
