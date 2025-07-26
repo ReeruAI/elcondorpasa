@@ -435,6 +435,9 @@ export default function Dashboard() {
           );
 
           if (contentPreference && languagePreference) {
+            // Don't wait for loading to complete - show UI immediately
+            setLoadingPreferences(false);
+
             // Start streaming from Gemini API
             setIsStreamingVideos(true);
             setStreamingMessage("🧠 Initializing AI recommendation engine...");
@@ -557,6 +560,9 @@ export default function Dashboard() {
               // Fallback to mock data
               setTrendingVideos(MOCK_TRENDING_VIDEOS);
             }
+
+            // Return early to prevent setting loadingPreferences to false at the end
+            return;
           }
         }
       } catch (error) {
@@ -932,8 +938,11 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-            ) : (
+            ) : hasPreferences === false ? (
               <PreferenceSetup />
+            ) : (
+              // Show streaming progress while checking preferences
+              <StreamingProgress message="Checking your preferences..." />
             )}
           </motion.div>
 
