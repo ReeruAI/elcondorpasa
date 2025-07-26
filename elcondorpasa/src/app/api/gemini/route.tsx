@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { preferenceSchema } from "@/schemas";
 import { generateYouTubePodcastStream } from "@/services/gemini";
+import { cookies } from "next/headers";
 
 // Enhanced output schema with reasoning
 const youtubeVideoSchema = z.object({
@@ -20,11 +21,27 @@ const youtubeVideosResponseSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse and validate request body
-    const body = await request.json();
-    const validatedData = preferenceSchema.parse(body);
+    // Get userId from cookies
+    const userId = request.headers.get("x-userId");
 
-    const { userId, contentPreference, languagePreference } = validatedData;
+    if (!userId) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+          message: "User ID not found in cookies",
+        },
+        { status: 401 }
+      );
+    }
+
+    // Parse and validate request body (without userId)
+    const body = await request.json();
+    const validatedData = preferenceSchema.parse({
+      ...body,
+      userId, // Add userId from cookies to the validation
+    });
+
+    const { contentPreference, languagePreference } = validatedData;
 
     // Check for required environment variables
     if (!process.env.YOUTUBE_API_KEY) {
