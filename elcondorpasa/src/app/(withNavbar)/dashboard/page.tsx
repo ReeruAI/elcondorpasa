@@ -194,52 +194,66 @@ const VideoOptionsModal: React.FC<ModalProps> = ({
 const VideoCard: React.FC<{
   video: TrendingVideo;
   onClick: () => void;
-}> = ({ video, onClick }) => (
-  <motion.div
-    whileHover={{ y: -5 }}
-    onClick={onClick}
-    className="flex-shrink-0 w-80 cursor-pointer group"
-  >
-    <div className="relative aspect-video rounded-xl overflow-hidden mb-4">
-      <img
-        src={video.thumbnail}
-        alt={video.title}
-        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      <div className="absolute bottom-2 left-2 bg-black/80 px-2 py-1 rounded text-xs">
-        {video.duration}
-      </div>
+  index?: number;
+  isVisible?: boolean;
+}> = ({ video, onClick, index = 0, isVisible = true }) => (
+  <AnimatePresence>
+    {isVisible && (
       <motion.div
-        initial={{ scale: 0, opacity: 0 }}
-        whileHover={{ scale: 1, opacity: 1 }}
-        className="absolute inset-0 flex items-center justify-center"
+        initial={{ opacity: 0, y: 20, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -20, scale: 0.9 }}
+        transition={{
+          delay: index * 0.2, // Staggered animation
+          duration: 0.4,
+          ease: "easeOut",
+        }}
+        whileHover={{ y: -5 }}
+        onClick={onClick}
+        className="flex-shrink-0 w-80 cursor-pointer group"
       >
-        <div className="bg-[#D68CB8] rounded-full p-3">
-          <Play className="w-6 h-6 text-white ml-0.5" />
+        <div className="relative aspect-video rounded-xl overflow-hidden mb-4">
+          <img
+            src={video.thumbnail}
+            alt={video.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="absolute bottom-2 left-2 bg-black/80 px-2 py-1 rounded text-xs">
+            {video.duration}
+          </div>
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            whileHover={{ scale: 1, opacity: 1 }}
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            <div className="bg-[#D68CB8] rounded-full p-3">
+              <Play className="w-6 h-6 text-white ml-0.5" />
+            </div>
+          </motion.div>
+        </div>
+
+        <div className="px-1">
+          <h3 className="font-semibold text-white line-clamp-2 mb-2 group-hover:text-[#D68CB8] transition-colors">
+            {video.title}
+          </h3>
+          <p className="text-sm text-gray-400 line-clamp-2 mb-3">
+            {video.description}
+          </p>
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <span className="flex items-center gap-1">
+              <Eye className="w-3 h-3" />
+              {video.views} views
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {video.duration}
+            </span>
+          </div>
         </div>
       </motion.div>
-    </div>
-
-    <div className="px-1">
-      <h3 className="font-semibold text-white line-clamp-2 mb-2 group-hover:text-[#D68CB8] transition-colors">
-        {video.title}
-      </h3>
-      <p className="text-sm text-gray-400 line-clamp-2 mb-3">
-        {video.description}
-      </p>
-      <div className="flex items-center gap-4 text-xs text-gray-500">
-        <span className="flex items-center gap-1">
-          <Eye className="w-3 h-3" />
-          {video.views} views
-        </span>
-        <span className="flex items-center gap-1">
-          <Clock className="w-3 h-3" />
-          {video.duration}
-        </span>
-      </div>
-    </div>
-  </motion.div>
+    )}
+  </AnimatePresence>
 );
 
 // Preference Setup Component
@@ -270,6 +284,42 @@ const PreferenceSetup: React.FC = () => {
   );
 };
 
+// Streaming Progress Component
+const StreamingProgress: React.FC<{ message: string }> = ({ message }) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="bg-[#2A2A2A] rounded-2xl p-8"
+  >
+    <div className="flex items-center justify-center mb-6">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{
+          duration: 2,
+          repeat: Infinity,
+          ease: "linear",
+        }}
+        className="w-16 h-16"
+      >
+        <Sparkles className="w-full h-full text-[#D68CB8]" />
+      </motion.div>
+    </div>
+    <AnimatePresence mode="wait">
+      <motion.p
+        key={message}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ duration: 0.3 }}
+        className="text-center text-gray-300 font-medium"
+      >
+        {message}
+      </motion.p>
+    </AnimatePresence>
+  </motion.div>
+);
+
 export default function Dashboard() {
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -278,8 +328,7 @@ export default function Dashboard() {
     null
   );
   const [showOptionsModal, setShowOptionsModal] = useState(false);
-  const [trendingVideos, setTrendingVideos] =
-    useState<TrendingVideo[]>(MOCK_TRENDING_VIDEOS);
+  const [trendingVideos, setTrendingVideos] = useState<TrendingVideo[]>([]);
   const [historyVideos, setHistoryVideos] =
     useState<TrendingVideo[]>(MOCK_TRENDING_VIDEOS);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -291,6 +340,8 @@ export default function Dashboard() {
     contentPreference?: string;
     languagePreference?: string;
   }>({});
+  const [streamedVideos, setStreamedVideos] = useState<TrendingVideo[]>([]);
+  const [showVideos, setShowVideos] = useState(false);
 
   const router = useRouter();
   const trendingSliderRef = useRef<HTMLDivElement>(
@@ -299,6 +350,63 @@ export default function Dashboard() {
   const historySliderRef = useRef<HTMLDivElement>(
     null
   ) as React.RefObject<HTMLDivElement>;
+
+  // Helper function to parse streaming messages
+  const parseStreamingMessage = (message: string): string => {
+    // Extract the last meaningful line from the message
+    const lines = message.split("\n").filter((line) => line.trim());
+    if (lines.length === 0) return "";
+
+    // Get the last line that contains actual progress info
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (
+        line.includes("🧠") ||
+        line.includes("✅") ||
+        line.includes("🔍") ||
+        line.includes("📊") ||
+        line.includes("🔄") ||
+        line.includes("🤖") ||
+        line.includes("---") ||
+        line.includes("❌") ||
+        line.includes("⚠️")
+      ) {
+        return line;
+      }
+    }
+
+    return lines[lines.length - 1];
+  };
+
+  // Function to handle video streaming
+  const processVideoStream = async (parsed: any) => {
+    if (parsed.type === "video" && parsed.data) {
+      const newVideo: TrendingVideo = {
+        id: parsed.data.videoUrl.split("v=")[1] || Math.random().toString(),
+        title: parsed.data.title,
+        thumbnail: parsed.data.thumbnailUrl,
+        description: parsed.data.reasoning,
+        url: parsed.data.videoUrl,
+        views:
+          typeof parsed.data.viewCount === "number"
+            ? parsed.data.viewCount > 1000000
+              ? (parsed.data.viewCount / 1000000).toFixed(1) + "M"
+              : parsed.data.viewCount > 1000
+              ? (parsed.data.viewCount / 1000).toFixed(1) + "K"
+              : parsed.data.viewCount.toString()
+            : parsed.data.viewCount,
+        duration: parsed.data.duration,
+        channel: parsed.data.creator,
+      };
+
+      setStreamedVideos((prev) => [...prev, newVideo]);
+
+      // Show videos container when first video arrives
+      if (!showVideos) {
+        setShowVideos(true);
+      }
+    }
+  };
 
   // Check user preferences and load trending videos
   useEffect(() => {
@@ -327,18 +435,16 @@ export default function Dashboard() {
           );
 
           if (contentPreference && languagePreference) {
+            // Don't wait for loading to complete - show UI immediately
+            setLoadingPreferences(false);
+
             // Start streaming from Gemini API
             setIsStreamingVideos(true);
             setStreamingMessage("🧠 Initializing AI recommendation engine...");
-
-            // Declare accumulatedMessage outside the try block
-            let accumulatedMessage = "";
+            setStreamedVideos([]);
+            setShowVideos(false);
 
             try {
-              // Clear any previous messages
-              setStreamingMessage("");
-              accumulatedMessage = "";
-
               const response = await fetch("/api/gemini", {
                 method: "POST",
                 headers: {
@@ -384,69 +490,58 @@ export default function Dashboard() {
                         if (data === "[DONE]") {
                           setIsStreamingVideos(false);
                           setStreamingMessage("");
+                          setTrendingVideos(streamedVideos);
                           continue;
                         }
 
                         try {
                           const parsed = JSON.parse(data);
 
-                          // Handle different types of streaming data
-                          if (parsed.analysisComplete) {
-                            // When analysis is complete, show a special message
-                            setStreamingMessage(parsed.message);
-                            // Force state update
-                            await new Promise((resolve) =>
-                              setTimeout(resolve, 0)
+                          // Handle progress messages
+                          if (parsed.type === "progress") {
+                            const cleanMessage = parseStreamingMessage(
+                              parsed.message
                             );
-                          } else if (parsed.isFinalJson) {
-                            // This is part of the final JSON, accumulate it but don't display
-                            setStreamingMessage(
-                              "📊 Processing final results..."
-                            );
-                            // Force state update
-                            await new Promise((resolve) =>
-                              setTimeout(resolve, 0)
-                            );
-                          } else if (parsed.chunk && !parsed.isFinalJson) {
-                            // This is progress text, display it immediately
-                            if (parsed.progressType === "queryGeneration") {
-                              accumulatedMessage = "";
+                            if (cleanMessage) {
+                              setStreamingMessage(cleanMessage);
                             }
-                            accumulatedMessage += parsed.chunk;
-                            setStreamingMessage(accumulatedMessage);
-                            // Force state update
-                            await new Promise((resolve) =>
-                              setTimeout(resolve, 0)
-                            );
                           }
 
-                          // Handle final video data
-                          if (parsed.final && parsed.data?.videos) {
-                            setTrendingVideos(
-                              parsed.data.videos.map((video: any) => ({
-                                id:
-                                  video.videoUrl.split("v=")[1] ||
-                                  Math.random().toString(),
-                                title: video.title,
-                                thumbnail: video.thumbnailUrl,
-                                description: video.reasoning,
-                                url: video.videoUrl,
-                                views:
-                                  typeof video.viewCount === "number"
-                                    ? video.viewCount > 1000000
-                                      ? (video.viewCount / 1000000).toFixed(1) +
-                                        "M"
-                                      : video.viewCount > 1000
-                                      ? (video.viewCount / 1000).toFixed(1) +
-                                        "K"
-                                      : video.viewCount.toString()
-                                    : video.viewCount,
-                                duration: video.duration,
-                                channel: video.creator,
-                              }))
-                            );
+                          // Handle video data
+                          else if (parsed.type === "video") {
+                            await processVideoStream(parsed);
+                          }
+
+                          // Handle completion
+                          else if (parsed.type === "complete") {
                             setIsStreamingVideos(false);
                             setStreamingMessage("");
+                            if (parsed.data?.videos) {
+                              setTrendingVideos(
+                                parsed.data.videos.map((video: any) => ({
+                                  id:
+                                    video.videoUrl.split("v=")[1] ||
+                                    Math.random().toString(),
+                                  title: video.title,
+                                  thumbnail: video.thumbnailUrl,
+                                  description: video.reasoning,
+                                  url: video.videoUrl,
+                                  views:
+                                    typeof video.viewCount === "number"
+                                      ? video.viewCount > 1000000
+                                        ? (video.viewCount / 1000000).toFixed(
+                                            1
+                                          ) + "M"
+                                        : video.viewCount > 1000
+                                        ? (video.viewCount / 1000).toFixed(1) +
+                                          "K"
+                                        : video.viewCount.toString()
+                                      : video.viewCount,
+                                  duration: video.duration,
+                                  channel: video.creator,
+                                }))
+                              );
+                            }
                           }
                         } catch (e) {
                           console.error("Error parsing streaming data:", e);
@@ -465,6 +560,9 @@ export default function Dashboard() {
               // Fallback to mock data
               setTrendingVideos(MOCK_TRENDING_VIDEOS);
             }
+
+            // Return early to prevent setting loadingPreferences to false at the end
+            return;
           }
         }
       } catch (error) {
@@ -531,6 +629,8 @@ export default function Dashboard() {
     setIsStreamingVideos(true);
     setStreamingMessage("🔄 Refreshing recommendations...");
     setTrendingVideos([]); // Clear existing videos
+    setStreamedVideos([]);
+    setShowVideos(false);
 
     try {
       const response = await fetch("/api/gemini", {
@@ -554,7 +654,6 @@ export default function Dashboard() {
 
       if (reader) {
         let buffer = "";
-        let accumulatedMessage = "";
 
         // Process stream chunk by chunk
         const processStream = async () => {
@@ -579,53 +678,53 @@ export default function Dashboard() {
                 if (data === "[DONE]") {
                   setIsStreamingVideos(false);
                   setStreamingMessage("");
+                  setTrendingVideos(streamedVideos);
                   continue;
                 }
 
                 try {
                   const parsed = JSON.parse(data);
 
-                  // Handle different types of streaming data
-                  if (parsed.analysisComplete) {
-                    setStreamingMessage(parsed.message);
-                    await new Promise((resolve) => setTimeout(resolve, 0));
-                  } else if (parsed.isFinalJson) {
-                    setStreamingMessage("📊 Processing final results...");
-                    await new Promise((resolve) => setTimeout(resolve, 0));
-                  } else if (parsed.chunk && !parsed.isFinalJson) {
-                    if (parsed.progressType === "queryGeneration") {
-                      accumulatedMessage = "";
+                  // Handle progress messages
+                  if (parsed.type === "progress") {
+                    const cleanMessage = parseStreamingMessage(parsed.message);
+                    if (cleanMessage) {
+                      setStreamingMessage(cleanMessage);
                     }
-                    accumulatedMessage += parsed.chunk;
-                    setStreamingMessage(accumulatedMessage);
-                    await new Promise((resolve) => setTimeout(resolve, 0));
                   }
 
-                  // Handle final video data
-                  if (parsed.final && parsed.data?.videos) {
-                    setTrendingVideos(
-                      parsed.data.videos.map((video: any) => ({
-                        id:
-                          video.videoUrl.split("v=")[1] ||
-                          Math.random().toString(),
-                        title: video.title,
-                        thumbnail: video.thumbnailUrl,
-                        description: video.reasoning,
-                        url: video.videoUrl,
-                        views:
-                          typeof video.viewCount === "number"
-                            ? video.viewCount > 1000000
-                              ? (video.viewCount / 1000000).toFixed(1) + "M"
-                              : video.viewCount > 1000
-                              ? (video.viewCount / 1000).toFixed(1) + "K"
-                              : video.viewCount.toString()
-                            : video.viewCount,
-                        duration: video.duration,
-                        channel: video.creator,
-                      }))
-                    );
+                  // Handle video data
+                  else if (parsed.type === "video") {
+                    await processVideoStream(parsed);
+                  }
+
+                  // Handle completion
+                  else if (parsed.type === "complete") {
                     setIsStreamingVideos(false);
                     setStreamingMessage("");
+                    if (parsed.data?.videos) {
+                      setTrendingVideos(
+                        parsed.data.videos.map((video: any) => ({
+                          id:
+                            video.videoUrl.split("v=")[1] ||
+                            Math.random().toString(),
+                          title: video.title,
+                          thumbnail: video.thumbnailUrl,
+                          description: video.reasoning,
+                          url: video.videoUrl,
+                          views:
+                            typeof video.viewCount === "number"
+                              ? video.viewCount > 1000000
+                                ? (video.viewCount / 1000000).toFixed(1) + "M"
+                                : video.viewCount > 1000
+                                ? (video.viewCount / 1000).toFixed(1) + "K"
+                                : video.viewCount.toString()
+                              : video.viewCount,
+                          duration: video.duration,
+                          channel: video.creator,
+                        }))
+                      );
+                    }
                   }
                 } catch (e) {
                   console.error("Error parsing streaming data:", e);
@@ -667,6 +766,9 @@ export default function Dashboard() {
       });
     }
   };
+
+  // Use either streamed videos or trending videos
+  const displayVideos = showVideos ? streamedVideos : trendingVideos;
 
   return (
     <>
@@ -759,7 +861,7 @@ export default function Dashboard() {
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={handleRefreshRecommendations}
-                    disabled={isRefreshing}
+                    disabled={isRefreshing || isStreamingVideos}
                     className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
                     title="Refresh recommendations"
                   >
@@ -793,29 +895,26 @@ export default function Dashboard() {
               <div className="flex justify-center items-center h-64">
                 <Loader2 className="w-8 h-8 animate-spin text-[#D68CB8]" />
               </div>
-            ) : isStreamingVideos ? (
-              <div className="bg-[#2A2A2A] rounded-2xl p-8">
-                <div className="flex items-center justify-center mb-6">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
-                    className="w-16 h-16"
-                  >
-                    <Sparkles className="w-full h-full text-[#D68CB8]" />
-                  </motion.div>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
-                    {streamingMessage}
-                  </pre>
-                </div>
-              </div>
+            ) : isStreamingVideos && !showVideos ? (
+              <StreamingProgress message={streamingMessage} />
             ) : hasPreferences ? (
               <div className="relative">
+                <AnimatePresence>
+                  {isStreamingVideos && showVideos && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute -top-8 left-0 right-0 text-center"
+                    >
+                      <span className="inline-flex items-center gap-2 px-4 py-2 bg-[#2A2A2A] rounded-full text-sm text-gray-300">
+                        <Loader2 className="w-4 h-4 animate-spin text-[#D68CB8]" />
+                        {streamingMessage || "Loading more videos..."}
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div
                   ref={trendingSliderRef}
                   className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
@@ -825,26 +924,25 @@ export default function Dashboard() {
                     WebkitOverflowScrolling: "touch",
                   }}
                 >
-                  {trendingVideos.map((video, index) => (
-                    <motion.div
+                  {displayVideos.map((video, index) => (
+                    <VideoCard
                       key={video.id}
-                      initial={{ opacity: 0, x: 50 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <VideoCard
-                        video={video}
-                        onClick={() => {
-                          setSelectedVideo(video);
-                          setShowOptionsModal(true);
-                        }}
-                      />
-                    </motion.div>
+                      video={video}
+                      onClick={() => {
+                        setSelectedVideo(video);
+                        setShowOptionsModal(true);
+                      }}
+                      index={index}
+                      isVisible={true}
+                    />
                   ))}
                 </div>
               </div>
-            ) : (
+            ) : hasPreferences === false ? (
               <PreferenceSetup />
+            ) : (
+              // Show streaming progress while checking preferences
+              <StreamingProgress message="Checking your preferences..." />
             )}
           </motion.div>
 
