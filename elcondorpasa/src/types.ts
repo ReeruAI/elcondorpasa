@@ -19,6 +19,36 @@ export type User = {
   password: string;
 };
 
+//! Database Models
+export interface UserModel {
+  _id?: ObjectId;
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+  phone: string;
+  telegram: boolean;
+  reeruToken: number;
+}
+
+export interface Package {
+  _id?: ObjectId;
+  name: string;
+  reeruToken: number;
+  price: number;
+}
+
+export interface Transaction {
+  _id?: ObjectId;
+  packageId: ObjectId;
+  userId: ObjectId;
+  status: "pending" | "paid" | "failed" | "expired";
+  amount: number;
+  order_id?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
 //! Landing Page Types
 export interface Step {
   icon: React.ComponentType<{ className?: string }>;
@@ -88,4 +118,23 @@ declare module "node-telegram-bot-api" {
     onText(regex: RegExp, callback: (msg: any) => void): void;
     sendMessage(chatId: number, text: string, options?: any): Promise<any>;
   }
+}
+
+//! Dashboard Types
+export interface TrendingVideo {
+  id: string;
+  title: string;
+  thumbnail: string;
+  description: string;
+  url: string;
+  views: string;
+  duration: string;
+  channel: string;
+}
+
+export interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  video: TrendingVideo | null;
+  onGenerateClip: (url: string) => void;
 }
