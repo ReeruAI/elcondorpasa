@@ -60,9 +60,7 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          let jsonContent = "";
-          let finalJsonStarted = false;
-          let searchProgress = "";
+          const collectedVideos: any[] = [];
 
           // Use the enhanced YouTube API service for streaming
           const streamGenerator = generateYouTubePodcastStream(
@@ -72,89 +70,56 @@ export async function POST(request: NextRequest) {
 
           // Stream the response
           for await (const chunk of streamGenerator) {
-            if (chunk) {
-              // Check if we've reached the final results JSON
-              if (chunk.includes("--- Final Results with Real Data ---")) {
-                finalJsonStarted = true;
+            if (typeof chunk === "string") {
+              // This is progress text
+              let progressType = "general";
+              if (chunk.includes("🧠 Generating"))
+                progressType = "queryGeneration";
+              else if (chunk.includes("🔍 Searching"))
+                progressType = "youtubeSearch";
+              else if (chunk.includes("🔄 Filtering"))
+                progressType = "filtering";
+              else if (chunk.includes("🤖 Analyzing"))
+                progressType = "geminiAnalysis";
+              else if (chunk.includes("--- Starting Gemini Analysis ---"))
+                progressType = "analysisStarted";
+              else if (chunk.includes("--- Streaming Video Results ---"))
+                progressType = "videosStarted";
 
-                // Send analysis completion message
-                const analysisData = `data: ${JSON.stringify({
-                  analysisComplete: true,
-                  message:
-                    "Gemini analysis completed, sending final results...",
-                  searchSummary: searchProgress.substring(0, 500) + "...",
-                })}\n\n`;
-                controller.enqueue(encoder.encode(analysisData));
-                continue;
-              }
+              const data = `data: ${JSON.stringify({
+                type: "progress",
+                progressType: progressType,
+                message: chunk.trim(),
+              })}\n\n`;
+              controller.enqueue(encoder.encode(data));
+            } else if (chunk.type === "video") {
+              // This is an individual video result
+              collectedVideos.push(chunk.data);
 
-              if (finalJsonStarted) {
-                // This is the final JSON content with reasoning
-                jsonContent += chunk;
-
-                // Send JSON chunk to client
-                const data = `data: ${JSON.stringify({
-                  chunk: chunk,
-                  accumulated: jsonContent,
-                  isFinalJson: true,
-                })}\n\n`;
-                controller.enqueue(encoder.encode(data));
-              } else {
-                // This is search/analysis process content
-                searchProgress += chunk;
-
-                // Determine the type of progress
-                let progressType = "general";
-                if (chunk.includes("🧠 Generating"))
-                  progressType = "queryGeneration";
-                else if (chunk.includes("🔍 Searching"))
-                  progressType = "youtubeSearch";
-                else if (chunk.includes("🔄 Filtering"))
-                  progressType = "filtering";
-                else if (chunk.includes("🤖 Analyzing"))
-                  progressType = "geminiAnalysis";
-
-                const data = `data: ${JSON.stringify({
-                  chunk: chunk,
-                  progressType: progressType,
-                })}\n\n`;
-                controller.enqueue(encoder.encode(data));
-              }
+              // Send individual video to frontend
+              const videoData = `data: ${JSON.stringify({
+                type: "video",
+                data: chunk.data,
+                index: collectedVideos.length - 1,
+                totalCount: 5, // We know we're getting 5 videos
+              })}\n\n`;
+              controller.enqueue(encoder.encode(videoData));
             }
           }
 
-          // Try to parse final accumulated JSON content
-          try {
-            const cleanJsonContent = jsonContent.trim();
-            const finalResponse = JSON.parse(cleanJsonContent);
-            const validatedResponse =
-              youtubeVideosResponseSchema.parse(finalResponse);
-
-            // Send final validated response with metadata
-            const finalData = `data: ${JSON.stringify({
-              final: true,
-              data: validatedResponse,
-              userId,
-              source: "YouTube Data API v3 + Gemini Analysis",
-              timestamp: new Date().toISOString(),
-              contentPreference,
-              languagePreference,
-            })}\n\n`;
-            controller.enqueue(encoder.encode(finalData));
-          } catch (parseError) {
-            console.error("Failed to parse final response:", parseError);
-            console.error("JSON content was:", jsonContent);
-
-            const errorData = `data: ${JSON.stringify({
-              error: "Failed to parse complete response",
-              accumulated: jsonContent,
-              details:
-                parseError instanceof Error
-                  ? parseError.message
-                  : String(parseError),
-            })}\n\n`;
-            controller.enqueue(encoder.encode(errorData));
-          }
+          // Send completion message with all collected videos
+          const completionData = `data: ${JSON.stringify({
+            type: "complete",
+            data: {
+              videos: collectedVideos,
+            },
+            userId,
+            source: "YouTube Data API v3 + Gemini Analysis",
+            timestamp: new Date().toISOString(),
+            contentPreference,
+            languagePreference,
+          })}\n\n`;
+          controller.enqueue(encoder.encode(completionData));
 
           // Close the stream
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -162,6 +127,7 @@ export async function POST(request: NextRequest) {
         } catch (error) {
           console.error("Streaming error:", error);
           const errorData = `data: ${JSON.stringify({
+            type: "error",
             error: "Stream failed",
             message: error instanceof Error ? error.message : "Unknown error",
           })}\n\n`;
@@ -175,10 +141,10 @@ export async function POST(request: NextRequest) {
     return new NextResponse(stream, {
       status: 200,
       headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Transfer-Encoding": "chunked",
+        "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
+        "X-Accel-Buffering": "no", // Disable Nginx buffering
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST",
         "Access-Control-Allow-Headers": "Content-Type",
