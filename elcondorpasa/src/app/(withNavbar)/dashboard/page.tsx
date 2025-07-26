@@ -363,7 +363,7 @@ export default function Dashboard() {
 
       console.log("History response:", response.data.data[0].videos);
 
-      if (response.data && response.data.data[0].videos) {
+      if (response.data && response.data.data) {
         const videos = response.data.data[0].videos;
 
         // Simulate streaming by adding videos one by one
@@ -886,44 +886,64 @@ export default function Dashboard() {
               <StreamingProgress message={streamingMessage} />
             ) : hasPreferences ? (
               <div className="relative">
-                <AnimatePresence>
-                  {isStreamingVideos && showVideos && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="absolute -top-8 left-0 right-0 text-center"
-                    >
-                      <span className="inline-flex items-center gap-2 px-4 py-2 bg-[#2A2A2A] rounded-full text-sm text-gray-300">
-                        <Loader2 className="w-4 h-4 animate-spin text-[#D68CB8]" />
-                        {streamingMessage || "Loading more videos..."}
-                      </span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {displayVideos.length === 0 && !isStreamingVideos ? (
+                  <div className="bg-[#2A2A2A] rounded-2xl p-8 text-center">
+                    <TrendingUp className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">
+                      No Recommendations Today
+                    </h3>
+                    <p className="text-gray-400">
+                      Check back later for AI-powered video recommendations
+                    </p>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <AnimatePresence>
+                      {isStreamingVideos && showVideos && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"
+                        >
+                          <div className="bg-black/90 backdrop-blur-md border border-white/20 rounded-full px-6 py-3 shadow-2xl">
+                            <span className="inline-flex items-center gap-2 text-sm text-white">
+                              <Loader2 className="w-4 h-4 animate-spin text-[#D68CB8]" />
+                              {streamingMessage || "Loading more videos..."}
+                            </span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
-                <div
-                  ref={trendingSliderRef}
-                  className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
-                  style={{
-                    scrollbarWidth: "none",
-                    msOverflowStyle: "none",
-                    WebkitOverflowScrolling: "touch",
-                  }}
-                >
-                  {displayVideos.map((video, index) => (
-                    <VideoCard
-                      key={video.id}
-                      video={video}
-                      onClick={() => {
-                        setSelectedVideo(video);
-                        setShowOptionsModal(true);
+                    <div
+                      ref={trendingSliderRef}
+                      className={`flex gap-6 overflow-x-auto scrollbar-hide pb-4 transition-opacity duration-300 ${
+                        isStreamingVideos && showVideos
+                          ? "opacity-50"
+                          : "opacity-100"
+                      }`}
+                      style={{
+                        scrollbarWidth: "none",
+                        msOverflowStyle: "none",
+                        WebkitOverflowScrolling: "touch",
                       }}
-                      index={index}
-                      isVisible={true}
-                    />
-                  ))}
-                </div>
+                    >
+                      {displayVideos.map((video, index) => (
+                        <VideoCard
+                          key={video.id}
+                          video={video}
+                          onClick={() => {
+                            setSelectedVideo(video);
+                            setShowOptionsModal(true);
+                          }}
+                          index={index}
+                          isVisible={true}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : hasPreferences === false ? (
               <PreferenceSetup />
