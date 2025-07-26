@@ -120,7 +120,7 @@ declare module "node-telegram-bot-api" {
   }
 }
 
-//! Dashboard Types
+//! Dashboard specific types
 export interface TrendingVideo {
   id: string;
   title: string;
@@ -137,4 +137,28 @@ export interface ModalProps {
   onClose: () => void;
   video: TrendingVideo | null;
   onGenerateClip: (url: string) => void;
+}
+
+export interface VideoCardProps {
+  video: TrendingVideo;
+  onClick: () => void;
+  index?: number;
+  isVisible?: boolean;
+}
+
+export interface UserPreferences {
+  contentPreference?: string;
+  languagePreference?: string;
+}
+
+export interface StreamingProgressProps {
+  message: string;
+}
+
+export interface LoadingModalProps {
+  isOpen: boolean;
+}
+
+export interface ScrollDirection {
+  direction: "left" | "right";
 }
