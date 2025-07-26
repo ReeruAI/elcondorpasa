@@ -23,65 +23,6 @@ import {
 } from "lucide-react";
 import { ModalProps, TrendingVideo } from "@/types";
 
-// Mock data for trending videos
-const MOCK_TRENDING_VIDEOS: TrendingVideo[] = [
-  {
-    id: "1",
-    title: "10 Mind-Blowing AI Tools You Need to Try in 2025",
-    thumbnail: "https://placehold.co/320x180",
-    description:
-      "Discover the latest AI tools that are revolutionizing content creation and productivity in 2025.",
-    url: "https://youtube.com/watch?v=example1",
-    views: "2.3M",
-    duration: "12:45",
-    channel: "Tech Insider",
-  },
-  {
-    id: "2",
-    title: "The Ultimate Morning Routine for Success",
-    thumbnail: "https://placehold.co/320x180",
-    description:
-      "Transform your mornings with this science-backed routine used by top performers.",
-    url: "https://youtube.com/watch?v=example2",
-    views: "1.8M",
-    duration: "8:32",
-    channel: "Productivity Pro",
-  },
-  {
-    id: "3",
-    title: "How to Start a Faceless YouTube Channel in 2025",
-    thumbnail: "https://placehold.co/320x180",
-    description:
-      "Complete guide to creating a successful faceless YouTube channel from scratch.",
-    url: "https://youtube.com/watch?v=example3",
-    views: "3.1M",
-    duration: "15:20",
-    channel: "Creator Academy",
-  },
-  {
-    id: "4",
-    title: "Top 5 Investment Strategies for Beginners",
-    thumbnail: "https://placehold.co/320x180",
-    description:
-      "Learn the fundamental investment strategies that every beginner should know.",
-    url: "https://youtube.com/watch?v=example4",
-    views: "1.2M",
-    duration: "10:15",
-    channel: "Finance Freedom",
-  },
-  {
-    id: "5",
-    title: "The Science of Going Viral on Social Media",
-    thumbnail: "https://placehold.co/320x180",
-    description:
-      "Understanding the psychology and algorithms behind viral content.",
-    url: "https://youtube.com/watch?v=example5",
-    views: "2.7M",
-    duration: "13:48",
-    channel: "Social Media Lab",
-  },
-];
-
 // Loading Modal Component
 const LoadingModal: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
   <AnimatePresence>
@@ -329,8 +270,9 @@ export default function Dashboard() {
   );
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [trendingVideos, setTrendingVideos] = useState<TrendingVideo[]>([]);
-  const [historyVideos, setHistoryVideos] =
-    useState<TrendingVideo[]>(MOCK_TRENDING_VIDEOS);
+  const [historyVideos, setHistoryVideos] = useState<TrendingVideo[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [historyStreamIndex, setHistoryStreamIndex] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasPreferences, setHasPreferences] = useState<boolean | null>(null);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
@@ -405,6 +347,52 @@ export default function Dashboard() {
       if (!showVideos) {
         setShowVideos(true);
       }
+    }
+  };
+
+  // Fetch history videos with simulated streaming
+  const fetchHistoryVideos = async () => {
+    try {
+      setIsLoadingHistory(true);
+      setHistoryVideos([]);
+      setHistoryStreamIndex(0);
+
+      const response = await axios.get("/api/history", {
+        withCredentials: true,
+      });
+
+      console.log("History response:", response.data.data[0].videos);
+
+      if (response.data && response.data.data[0].videos) {
+        const videos = response.data.data[0].videos;
+
+        // Simulate streaming by adding videos one by one
+        for (let i = 0; i < videos.length; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 500)); // 0.5 second delay
+
+          const video: TrendingVideo = {
+            id:
+              videos[i].videoUrl?.split("v=")[1] ||
+              videos[i].id ||
+              Math.random().toString(),
+            title: videos[i].title,
+            thumbnail: videos[i].thumbnailUrl || videos[i].thumbnail,
+            description: videos[i].reasoning || videos[i].description || "",
+            url: videos[i].videoUrl || videos[i].url,
+            views: videos[i].viewCount || videos[i].views || "0",
+            duration: videos[i].duration || "0:00",
+            channel: videos[i].creator || videos[i].channel || "Unknown",
+          };
+
+          setHistoryVideos((prev) => [...prev, video]);
+          setHistoryStreamIndex(i + 1);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching history videos:", error);
+      // You might want to show an error toast here
+    } finally {
+      setIsLoadingHistory(false);
     }
   };
 
@@ -557,8 +545,7 @@ export default function Dashboard() {
               console.error("Error streaming videos:", error);
               setIsStreamingVideos(false);
               setStreamingMessage("");
-              // Fallback to mock data
-              setTrendingVideos(MOCK_TRENDING_VIDEOS);
+              // Don't fallback to mock data anymore
             }
 
             // Return early to prevent setting loadingPreferences to false at the end
@@ -575,8 +562,8 @@ export default function Dashboard() {
 
     checkPreferencesAndLoadVideos();
 
-    // Load history videos separately (mock for now)
-    setHistoryVideos(MOCK_TRENDING_VIDEOS);
+    // Fetch history videos
+    fetchHistoryVideos();
   }, []);
 
   const handleSubmitUrl = async (e: React.FormEvent) => {
@@ -979,32 +966,45 @@ export default function Dashboard() {
             </div>
 
             <div className="relative">
-              <div
-                ref={historySliderRef}
-                className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
-                style={{
-                  scrollbarWidth: "none",
-                  msOverflowStyle: "none",
-                  WebkitOverflowScrolling: "touch",
-                }}
-              >
-                {historyVideos.map((video, index) => (
-                  <motion.div
-                    key={video.id}
-                    initial={{ opacity: 0, x: 50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
+              {isLoadingHistory && historyVideos.length === 0 ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-[#D68CB8] mx-auto mb-4" />
+                    <p className="text-gray-400">Loading your history...</p>
+                  </div>
+                </div>
+              ) : historyVideos.length === 0 ? (
+                <div className="bg-[#2A2A2A] rounded-2xl p-8 text-center">
+                  <History className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">No History Yet</h3>
+                  <p className="text-gray-400">
+                    Your generated clips will appear here
+                  </p>
+                </div>
+              ) : (
+                <div
+                  ref={historySliderRef}
+                  className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
+                  style={{
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none",
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  {historyVideos.map((video, index) => (
                     <VideoCard
+                      key={video.id}
                       video={video}
                       onClick={() => {
                         setSelectedVideo(video);
                         setShowOptionsModal(true);
                       }}
+                      index={index}
+                      isVisible={index < historyStreamIndex}
                     />
-                  </motion.div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </motion.div>
         </div>

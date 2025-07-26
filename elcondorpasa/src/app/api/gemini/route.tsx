@@ -3,6 +3,7 @@ import { z } from "zod";
 import { preferenceSchema } from "@/schemas";
 import { generateYouTubePodcastStream } from "@/services/gemini";
 import { cookies } from "next/headers";
+import HistoryModel from "@/db/models/HistoryModel";
 
 // Enhanced output schema with reasoning
 const youtubeVideoSchema = z.object({
@@ -105,6 +106,32 @@ export async function POST(request: NextRequest) {
               })}\n\n`;
               controller.enqueue(encoder.encode(videoData));
             }
+          }
+
+          // Save to history database before sending completion
+          if (collectedVideos.length > 0) {
+            try {
+              const historyData = {
+                userId,
+                contentPreference,
+                languagePreference,
+                videos: collectedVideos,
+                source: "YouTube Data API v3 + Gemini Analysis",
+                timestamp: new Date(),
+              };
+
+              const historyId = await HistoryModel.createHistory(historyData);
+              console.log("✅ History saved successfully with ID:", historyId);
+              console.log(
+                `✅ Saved ${collectedVideos.length} videos to history`
+              );
+            } catch (dbError) {
+              console.error("❌ Failed to save history:", dbError);
+              // Don't fail the whole request if history save fails
+              // You might want to add a flag in the response to indicate save failure
+            }
+          } else {
+            console.log("⚠️ No videos collected, skipping history save");
           }
 
           // Send completion message with all collected videos
