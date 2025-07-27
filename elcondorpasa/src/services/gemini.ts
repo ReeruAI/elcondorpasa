@@ -331,6 +331,7 @@ export async function* generateYouTubePodcastStream(
           });
 
           allVideos.push(...videosWithDetails);
+          console.log(allVideos);
         }
       } catch (error) {
         yield `   ❌ Error searching "${query}": ${
