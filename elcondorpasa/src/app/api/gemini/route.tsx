@@ -1,45 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { preferenceSchema } from "@/schemas";
-import { generateYouTubePodcastStream } from "@/services/gemini";
-import { cookies } from "next/headers";
+
 import HistoryModel from "@/db/models/HistoryModel";
+import { getYouTubeRecommendations } from "@/lib/gemini";
 
-// Enhanced output schema with reasoning
-const youtubeVideoSchema = z.object({
-  title: z.string(),
-  thumbnailUrl: z.string(),
-  videoUrl: z.string(),
-  creator: z.string(),
-  viewCount: z.number(),
-  duration: z.string(),
-  reasoning: z.string(),
-});
-
-const youtubeVideosResponseSchema = z.object({
-  videos: z.array(youtubeVideoSchema).max(5),
-});
+const encoder = new TextEncoder();
 
 export async function POST(request: NextRequest) {
   try {
-    // Get userId from cookies
+    // Get userId from headers
     const userId = request.headers.get("x-userId");
 
     if (!userId) {
       return NextResponse.json(
         {
           error: "Unauthorized",
-          message: "User ID not found in cookies",
+          message: "User ID not found in headers",
         },
         { status: 401 }
       );
     }
 
-    // Parse and validate request body (without userId)
+    // Parse and validate request body
     const body = await request.json();
     const validatedData = preferenceSchema.parse({
       ...body,
-      userId, // Add userId from cookies to the validation
+      userId,
     });
 
     const { contentPreference, languagePreference } = validatedData;
@@ -56,15 +43,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Set up streaming response
-    const encoder = new TextEncoder();
-
     const stream = new ReadableStream({
       async start(controller) {
         try {
           const collectedVideos: any[] = [];
 
-          // Use the enhanced YouTube API service for streaming
-          const streamGenerator = generateYouTubePodcastStream(
+          // Get recommendations (with caching and deduplication)
+          const streamGenerator = getYouTubeRecommendations(
+            userId,
             contentPreference,
             languagePreference
           );
@@ -72,20 +58,20 @@ export async function POST(request: NextRequest) {
           // Stream the response
           for await (const chunk of streamGenerator) {
             if (typeof chunk === "string") {
-              // This is progress text
+              // Progress updates
               let progressType = "general";
-              if (chunk.includes("🧠 Generating"))
+              if (chunk.includes("🎯 Cache hit!")) progressType = "cacheHit";
+              else if (chunk.includes("📊 Checking refresh limit"))
+                progressType = "refreshCheck";
+              else if (chunk.includes("🧠 Generating"))
                 progressType = "queryGeneration";
               else if (chunk.includes("🔍 Searching"))
                 progressType = "youtubeSearch";
-              else if (chunk.includes("🔄 Filtering"))
-                progressType = "filtering";
+              else if (chunk.includes("🔄 Processing"))
+                progressType = "processing";
               else if (chunk.includes("🤖 Analyzing"))
                 progressType = "geminiAnalysis";
-              else if (chunk.includes("--- Starting Gemini Analysis ---"))
-                progressType = "analysisStarted";
-              else if (chunk.includes("--- Streaming Video Results ---"))
-                progressType = "videosStarted";
+              else if (chunk.includes("💾 Caching")) progressType = "caching";
 
               const data = `data: ${JSON.stringify({
                 type: "progress",
@@ -94,21 +80,20 @@ export async function POST(request: NextRequest) {
               })}\n\n`;
               controller.enqueue(encoder.encode(data));
             } else if (chunk.type === "video") {
-              // This is an individual video result
+              // Individual video result
               collectedVideos.push(chunk.data);
 
-              // Send individual video to frontend
               const videoData = `data: ${JSON.stringify({
                 type: "video",
                 data: chunk.data,
                 index: collectedVideos.length - 1,
-                totalCount: 5, // We know we're getting 5 videos
+                totalCount: 5,
               })}\n\n`;
               controller.enqueue(encoder.encode(videoData));
             }
           }
 
-          // Save to history database before sending completion
+          // Save to history database
           if (collectedVideos.length > 0) {
             try {
               const historyData = {
@@ -122,19 +107,12 @@ export async function POST(request: NextRequest) {
 
               const historyId = await HistoryModel.createHistory(historyData);
               console.log("✅ History saved successfully with ID:", historyId);
-              console.log(
-                `✅ Saved ${collectedVideos.length} videos to history`
-              );
             } catch (dbError) {
               console.error("❌ Failed to save history:", dbError);
-              // Don't fail the whole request if history save fails
-              // You might want to add a flag in the response to indicate save failure
             }
-          } else {
-            console.log("⚠️ No videos collected, skipping history save");
           }
 
-          // Send completion message with all collected videos
+          // Send completion message
           const completionData = `data: ${JSON.stringify({
             type: "complete",
             data: {
@@ -171,7 +149,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
-        "X-Accel-Buffering": "no", // Disable Nginx buffering
+        "X-Accel-Buffering": "no",
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST",
         "Access-Control-Allow-Headers": "Content-Type",
