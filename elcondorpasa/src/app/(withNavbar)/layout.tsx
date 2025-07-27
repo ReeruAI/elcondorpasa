@@ -1,4 +1,5 @@
 import Navbar from "@/components/Navbar";
+import { TokenProvider } from "@/components/Navbar";
 
 export default function RootLayout({
   children,
@@ -8,11 +9,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="pb-20">
-          <Navbar />
-        </div>
-        {/* Main content area */}
-        <main className="">{children}</main>
+        <TokenProvider>
+          <div className="pb-20">
+            <Navbar />
+          </div>
+          {/* Main content area */}
+          <main className="">{children}</main>
+        </TokenProvider>
       </body>
     </html>
   );

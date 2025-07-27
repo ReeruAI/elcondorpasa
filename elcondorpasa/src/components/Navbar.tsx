@@ -1,28 +1,86 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Menu, Sparkles, X, User, LogOut, Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
-// Debounce hook for optimized scroll handling
-const useDebounce = (value: any, delay: number) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
+// Token context for global state management
+import { createContext, useContext } from "react";
 
+interface TokenContextType {
+  tokens: number;
+  updateTokens: (newTokens: number) => void;
+  addTokens: (amount: number) => void;
+  refreshTokens: () => Promise<void>;
+  isLoading: boolean;
+}
+
+const TokenContext = createContext<TokenContextType | undefined>(undefined);
+
+export function TokenProvider({ children }: { children: React.ReactNode }) {
+  const [tokens, setTokens] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const hasLoadedTokens = useRef(false);
+
+  const refreshTokens = useCallback(async () => {
+    if (isLoading || !document.cookie.includes("isLoggedIn=true")) return;
+
+    try {
+      setIsLoading(true);
+      const response = await axios.get("/api/profile", {
+        withCredentials: true,
+        timeout: 5000,
+      });
+
+      if (response.data?.success && response.data?.user) {
+        setTokens(response.data.user.reeruToken || 0);
+        hasLoadedTokens.current = true;
+      }
+    } catch (error) {
+      console.error("Error fetching user tokens:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading]);
+
+  const updateTokens = useCallback((newTokens: number) => {
+    setTokens(newTokens);
+  }, []);
+
+  const addTokens = useCallback((amount: number) => {
+    setTokens((prev) => prev + amount);
+  }, []);
+
+  // Initial load
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
+    if (
+      !hasLoadedTokens.current &&
+      document.cookie.includes("isLoggedIn=true")
+    ) {
+      refreshTokens();
+    }
+  }, [refreshTokens]);
 
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
+  return (
+    <TokenContext.Provider
+      value={{ tokens, updateTokens, addTokens, refreshTokens, isLoading }}
+    >
+      {children}
+    </TokenContext.Provider>
+  );
+}
 
-  return debouncedValue;
+export const useTokens = () => {
+  const context = useContext(TokenContext);
+  if (!context) {
+    throw new Error("useTokens must be used within TokenProvider");
+  }
+  return context;
 };
 
+// Scale button component
 interface ScaleButtonProps extends React.ComponentProps<typeof motion.button> {
   children: React.ReactNode;
   className?: string;
@@ -46,15 +104,20 @@ const ScaleButton: React.FC<ScaleButtonProps> = ({
 export default function Navbar() {
   const [isVisible, setIsVisible] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const [scrollY, setScrollY] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [userTokens, setUserTokens] = useState<number>(0);
-  const [isLoadingTokens, setIsLoadingTokens] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const authCheckInterval = useRef<NodeJS.Timeout | null>(null);
-  const hasLoadedTokens = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollRef = useRef(0);
+
+  // Use token context
+  const {
+    tokens: userTokens,
+    isLoading: isLoadingTokens,
+    refreshTokens,
+  } = useTokens();
 
   const navLinks = useMemo(
     () => [
@@ -78,91 +141,66 @@ export default function Navbar() {
     }
   }, []);
 
-  // Optimized token fetching with error handling
-  const fetchUserTokens = useCallback(async () => {
-    // Prevent multiple simultaneous calls
-    if (isLoadingTokens || hasLoadedTokens.current) return;
+  // Optimized scroll handler - fixes blinking
+  useEffect(() => {
+    let ticking = false;
 
-    try {
-      setIsLoadingTokens(true);
-      const response = await axios.get("/api/profile", {
-        withCredentials: true,
-        timeout: 5000,
-      });
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
 
-      if (response.data?.success && response.data?.user) {
-        setUserTokens(response.data.user.reeruToken || 0);
-        hasLoadedTokens.current = true;
+          // Clear any existing timeout
+          if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+          }
+
+          // Only hide navbar when scrolling down past threshold
+          if (currentScrollY > lastScrollRef.current && currentScrollY > 100) {
+            setIsVisible(false);
+          } else if (
+            currentScrollY < lastScrollRef.current ||
+            currentScrollY <= 100
+          ) {
+            setIsVisible(true);
+          }
+
+          lastScrollRef.current = currentScrollY;
+          setScrollY(currentScrollY);
+          ticking = false;
+        });
+        ticking = true;
       }
-    } catch (error) {
-      console.error("Error fetching user tokens:", error);
-      setUserTokens(0);
-    } finally {
-      setIsLoadingTokens(false);
-    }
-  }, [isLoadingTokens]);
+    };
 
-  // Optimized auth checking with cleanup
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Auth checking
   useEffect(() => {
     const checkAuth = () => {
       const isAuthenticated = getAuthStatus();
-      const wasLoggedIn = isLoggedIn;
       setIsLoggedIn(isAuthenticated);
-
-      // Reset token loaded flag if user logged out
-      if (wasLoggedIn && !isAuthenticated) {
-        hasLoadedTokens.current = false;
-      }
     };
 
     checkAuth();
 
-    // Only check every 5 seconds instead of every second
-    authCheckInterval.current = setInterval(checkAuth, 5000);
-
+    // Check auth status on tab focus
     const handleFocus = () => checkAuth();
     window.addEventListener("focus", handleFocus);
 
     return () => {
       window.removeEventListener("focus", handleFocus);
-      if (authCheckInterval.current) {
-        clearInterval(authCheckInterval.current);
-      }
     };
-  }, [getAuthStatus, isLoggedIn]);
+  }, [getAuthStatus]);
 
-  // Fetch tokens when login status changes
-  useEffect(() => {
-    if (isLoggedIn && !hasLoadedTokens.current) {
-      fetchUserTokens();
-    } else if (!isLoggedIn) {
-      setUserTokens(0);
-      hasLoadedTokens.current = false;
-    }
-  }, [isLoggedIn, fetchUserTokens]);
-
-  // Optimized scroll handler with debouncing
-  const debouncedScrollY = useDebounce(lastScrollY, 100);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      setLastScrollY(currentScrollY);
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    if (debouncedScrollY > lastScrollY && debouncedScrollY > 100) {
-      setIsVisible(false);
-    } else {
-      setIsVisible(true);
-    }
-  }, [debouncedScrollY, lastScrollY]);
-
-  // Handle outside clicks
+  // Handle outside clicks for dropdown
   useEffect(() => {
     if (!isDropdownOpen) return;
 
@@ -204,13 +242,11 @@ export default function Navbar() {
       setIsLoggedIn(false);
       setIsDropdownOpen(false);
       setIsMobileMenuOpen(false);
-      setUserTokens(0);
-      hasLoadedTokens.current = false;
       router.push("/login");
     }
   }, [router]);
 
-  // Simplified token display component
+  // Token display component
   const TokenDisplay = ({ compact = false }: { compact?: boolean }) => (
     <motion.div
       className={`flex items-center space-x-2 ${
@@ -241,10 +277,16 @@ export default function Navbar() {
   );
 
   return (
-    <nav
-      className={`fixed w-full backdrop-blur-md transition-transform duration-300 z-50 ${
-        isVisible ? "translate-y-0" : "-translate-y-full"
-      }`}
+    <motion.nav
+      initial={false}
+      animate={{
+        transform: isVisible ? "translateY(0%)" : "translateY(-100%)",
+      }}
+      transition={{
+        duration: 0.3,
+        ease: "easeInOut",
+      }}
+      className="fixed w-full backdrop-blur-md z-50"
       style={{ backgroundColor: "rgba(29,29,29,0.95)" }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -292,9 +334,9 @@ export default function Navbar() {
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-pink-300 to-pink-400 hover:shadow-lg hover:shadow-pink-500/30 transition-all duration-200"
+                    className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#D68CB8] to-pink-400 hover:shadow-lg hover:shadow-pink-500/30 transition-all duration-200"
                   >
-                    <User className="w-5 h-5 text-gray-900" />
+                    <User className="w-5 h-5 text-white" />
                   </motion.button>
 
                   <AnimatePresence>
@@ -304,11 +346,11 @@ export default function Navbar() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-black-900 border border-black-700"
+                        className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-gray-900 border border-gray-700"
                       >
                         <button
                           onClick={handleLogout}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-300 hover:bg-black-800 hover:text-white transition-colors rounded-lg"
+                          className="flex items-center w-full px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors rounded-lg"
                         >
                           <LogOut className="w-4 h-4 mr-3" />
                           Logout
@@ -321,7 +363,7 @@ export default function Navbar() {
             ) : (
               <ScaleButton
                 onClick={handleGetStarted}
-                className="px-6 py-2.5 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full font-semibold text-sm hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300"
+                className="px-6 py-2.5 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-full font-semibold text-sm text-white hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300"
               >
                 Get Started
               </ScaleButton>
@@ -375,8 +417,8 @@ export default function Navbar() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between px-3 py-2">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full flex items-center justify-center">
-                          <User className="w-5 h-5 text-gray-900" />
+                        <div className="w-8 h-8 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-full flex items-center justify-center">
+                          <User className="w-5 h-5 text-white" />
                         </div>
                         <TokenDisplay compact />
                       </div>
@@ -392,7 +434,7 @@ export default function Navbar() {
                 ) : (
                   <ScaleButton
                     onClick={handleGetStarted}
-                    className="w-full px-6 py-2.5 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full font-semibold text-sm hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300"
+                    className="w-full px-6 py-2.5 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-full font-semibold text-sm text-white hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300"
                   >
                     Get Started
                   </ScaleButton>
@@ -402,6 +444,6 @@ export default function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
-    </nav>
+    </motion.nav>
   );
 }
