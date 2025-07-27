@@ -467,7 +467,7 @@ Respond with ONLY the reasoning text, no JSON formatting.`;
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
     }
-
+    // Finalize the stream
     yield `\n✅ Analysis complete. Streamed ${analyzedVideos.length} videos.\n`;
   } catch (error) {
     console.error("❌ Enhanced YouTube streaming error:", error);
