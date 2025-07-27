@@ -162,3 +162,37 @@ export interface LoadingModalProps {
 export interface ScrollDirection {
   direction: "left" | "right";
 }
+
+// Klap API Types
+export interface KlapStreamData {
+  status: string;
+  message: string;
+  progress: number;
+  task_id?: string;
+  project_id?: string;
+  short?: {
+    id: string;
+    title: string;
+    virality_score: number;
+    transcript: string;
+    description: string;
+    captions: {
+      tiktok: string;
+      youtube: string;
+      linkedin: string;
+      instagram: string;
+    };
+    export_status: string;
+    download_url: string;
+    export_id: string;
+  };
+}
+
+export interface ProcessingState {
+  isProcessing: boolean;
+  taskId?: string;
+  projectId?: string;
+  progress: number;
+  message: string;
+  status: string;
+}

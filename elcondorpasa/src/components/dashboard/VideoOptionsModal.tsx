@@ -1,12 +1,17 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ExternalLink, Zap } from "lucide-react";
+import { X, ExternalLink, Zap, Loader2 } from "lucide-react";
 import { ModalProps } from "@/types";
 
-export const VideoOptionsModal: React.FC<ModalProps> = ({
+interface ExtendedModalProps extends ModalProps {
+  isProcessing?: boolean;
+}
+
+export const VideoOptionsModal: React.FC<ExtendedModalProps> = ({
   isOpen,
   onClose,
   video,
   onGenerateClip,
+  isProcessing = false,
 }) => (
   <AnimatePresence>
     {isOpen && video && (
@@ -52,17 +57,35 @@ export const VideoOptionsModal: React.FC<ModalProps> = ({
             </motion.a>
 
             <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: isProcessing ? 1 : 1.02 }}
+              whileTap={{ scale: isProcessing ? 1 : 0.98 }}
               onClick={() => {
-                onGenerateClip(video.url);
-                onClose();
+                if (!isProcessing) {
+                  onGenerateClip(video.url);
+                  onClose();
+                }
               }}
-              className="flex items-center justify-center gap-3 w-full py-3 px-4 bg-gradient-to-r from-[#D68CB8] to-pink-400 hover:shadow-lg hover:shadow-pink-500/25 rounded-xl transition-all duration-300 font-medium"
+              disabled={isProcessing}
+              className="flex items-center justify-center gap-3 w-full py-3 px-4 bg-gradient-to-r from-[#D68CB8] to-pink-400 hover:shadow-lg hover:shadow-pink-500/25 rounded-xl transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Zap className="w-5 h-5" />
-              <span>Generate Clips</span>
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-5 h-5" />
+                  <span>Generate Clips</span>
+                </>
+              )}
             </motion.button>
+
+            {isProcessing && (
+              <p className="text-xs text-yellow-400 text-center mt-2">
+                A video is currently being processed
+              </p>
+            )}
           </div>
         </motion.div>
       </motion.div>

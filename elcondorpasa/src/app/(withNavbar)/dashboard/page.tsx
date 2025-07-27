@@ -16,7 +16,12 @@ import { VideoCarousel } from "@/components/dashboard/VideoCarousel";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 
 // Types
-import { TrendingVideo, UserPreferences } from "@/types";
+import {
+  TrendingVideo,
+  UserPreferences,
+  KlapStreamData,
+  ProcessingState,
+} from "@/types";
 
 // Utils
 import {
@@ -24,6 +29,12 @@ import {
   parseStreamingMessage,
   scrollSlider,
 } from "@/utils/dashboard";
+import {
+  saveProcessingState,
+  getProcessingState,
+  clearProcessingState,
+  processKlapStream,
+} from "@/utils/klap";
 
 export default function Dashboard() {
   // State management
@@ -46,6 +57,14 @@ export default function Dashboard() {
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({});
   const [streamedVideos, setStreamedVideos] = useState<TrendingVideo[]>([]);
   const [showVideos, setShowVideos] = useState(false);
+
+  // Klap processing states
+  const [processingState, setProcessingState] = useState<ProcessingState>({
+    isProcessing: false,
+    progress: 0,
+    message: "",
+    status: "idle",
+  });
 
   const router = useRouter();
   const trendingSliderRef = useRef<HTMLDivElement>(
@@ -202,6 +221,12 @@ export default function Dashboard() {
 
   // Check user preferences and load trending videos
   useEffect(() => {
+    // Check for existing processing state
+    const savedState = getProcessingState();
+    if (savedState && savedState.isProcessing) {
+      setProcessingState(savedState);
+    }
+
     const checkPreferencesAndLoadVideos = async () => {
       try {
         setLoadingPreferences(true);
@@ -242,16 +267,87 @@ export default function Dashboard() {
 
   const handleSubmitUrl = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
+    if (!url.trim() || processingState.isProcessing) return;
 
     setIsLoading(true);
     setShowLoadingModal(true);
 
+    const newProcessingState: ProcessingState = {
+      isProcessing: true,
+      progress: 0,
+      message: "Initializing video processing...",
+      status: "starting",
+    };
+
+    setProcessingState(newProcessingState);
+    saveProcessingState(newProcessingState);
+
     try {
-      await axios.post("/api/generate-clips", { url });
-      setTimeout(() => router.push("/clips"), 2000);
+      const response = await fetch("/api/klap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ video_url: url }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to start processing");
+      }
+
+      await processKlapStream(
+        response,
+        // onProgress
+        (data: KlapStreamData) => {
+          const updatedState: ProcessingState = {
+            isProcessing: true,
+            taskId: data.task_id,
+            projectId: data.project_id,
+            progress: data.progress,
+            message: data.message,
+            status: data.status,
+          };
+          setProcessingState(updatedState);
+          saveProcessingState(updatedState);
+        },
+        // onComplete
+        (data: KlapStreamData) => {
+          clearProcessingState();
+          setProcessingState({
+            isProcessing: false,
+            progress: 100,
+            message: "Successfully completed!",
+            status: "completed",
+          });
+
+          // Save the result if needed
+          if (data.short) {
+            // You can save the short data or redirect
+            setTimeout(() => {
+              router.push("/clips");
+            }, 2000);
+          }
+        },
+        // onError
+        (error: string) => {
+          clearProcessingState();
+          setProcessingState({
+            isProcessing: false,
+            progress: 0,
+            message: error,
+            status: "error",
+          });
+          console.error("Klap processing error:", error);
+        }
+      );
     } catch (error) {
       console.error("Error generating clips:", error);
+      clearProcessingState();
+      setProcessingState({
+        isProcessing: false,
+        progress: 0,
+        message: "Failed to process video",
+        status: "error",
+      });
       setShowLoadingModal(false);
     } finally {
       setIsLoading(false);
@@ -259,14 +355,100 @@ export default function Dashboard() {
   };
 
   const handleGenerateClip = async (videoUrl: string) => {
+    if (processingState.isProcessing) return;
+
+    setUrl(videoUrl);
     setShowLoadingModal(true);
+
+    const newProcessingState: ProcessingState = {
+      isProcessing: true,
+      progress: 0,
+      message: "Initializing video processing...",
+      status: "starting",
+    };
+
+    setProcessingState(newProcessingState);
+    saveProcessingState(newProcessingState);
+
     try {
-      await axios.post("/api/generate-clips", { url: videoUrl });
-      setTimeout(() => router.push("/clips"), 2000);
+      const response = await fetch("/api/klap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ video_url: videoUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to start processing");
+      }
+
+      await processKlapStream(
+        response,
+        // onProgress
+        (data: KlapStreamData) => {
+          const updatedState: ProcessingState = {
+            isProcessing: true,
+            taskId: data.task_id,
+            projectId: data.project_id,
+            progress: data.progress,
+            message: data.message,
+            status: data.status,
+          };
+          setProcessingState(updatedState);
+          saveProcessingState(updatedState);
+        },
+        // onComplete
+        (data: KlapStreamData) => {
+          clearProcessingState();
+          setProcessingState({
+            isProcessing: false,
+            progress: 100,
+            message: "Successfully completed!",
+            status: "completed",
+          });
+
+          if (data.short) {
+            setTimeout(() => {
+              router.push("/clips");
+            }, 2000);
+          }
+        },
+        // onError
+        (error: string) => {
+          clearProcessingState();
+          setProcessingState({
+            isProcessing: false,
+            progress: 0,
+            message: error,
+            status: "error",
+          });
+          console.error("Klap processing error:", error);
+        }
+      );
     } catch (error) {
       console.error("Error generating clips:", error);
+      clearProcessingState();
+      setProcessingState({
+        isProcessing: false,
+        progress: 0,
+        message: "Failed to process video",
+        status: "error",
+      });
       setShowLoadingModal(false);
     }
+  };
+
+  const handleCheckProgress = () => {
+    const savedState = getProcessingState();
+    if (savedState) {
+      setProcessingState(savedState);
+      setShowLoadingModal(true);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowLoadingModal(false);
+    // Don't clear processing state when closing, just hide the modal
   };
 
   const handleRefreshRecommendations = () => {
@@ -288,12 +470,20 @@ export default function Dashboard() {
 
   return (
     <>
-      <LoadingModal isOpen={showLoadingModal} />
+      <LoadingModal
+        isOpen={showLoadingModal}
+        progress={processingState.progress}
+        message={processingState.message}
+        status={processingState.status}
+        onClose={handleCloseModal}
+        canClose={true}
+      />
       <VideoOptionsModal
         isOpen={showOptionsModal}
         onClose={() => setShowOptionsModal(false)}
         video={selectedVideo}
         onGenerateClip={handleGenerateClip}
+        isProcessing={processingState.isProcessing}
       />
 
       <div className="min-h-screen bg-[#1D1D1D] text-white">
@@ -314,6 +504,8 @@ export default function Dashboard() {
             setUrl={setUrl}
             isLoading={isLoading}
             onSubmit={handleSubmitUrl}
+            onCheckProgress={handleCheckProgress}
+            isProcessing={processingState.isProcessing}
           />
 
           {/* Trending Videos Section */}
