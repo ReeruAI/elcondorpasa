@@ -357,7 +357,7 @@ export async function POST(request: NextRequest) {
               await delay(10000);
             }
 
-            // Send final completion with the single best short
+            // Send final completion with the single best short adsd
             sendUpdate({
               status: "completed",
               message: "Successfully exported the best short!",
