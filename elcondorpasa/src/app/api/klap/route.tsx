@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
             controller.close();
             return;
           }
-
+          // Check if task_id is present
           const { id: task_id } = taskData;
 
           if (!task_id) {
