@@ -111,15 +111,6 @@ export interface FormField {
   icon: LucideIcon;
 }
 
-declare module "node-telegram-bot-api" {
-  export default class TelegramBot {
-    constructor(token: string, options: { polling?: boolean });
-    on(event: string, callback: (msg: any) => void): void;
-    onText(regex: RegExp, callback: (msg: any) => void): void;
-    sendMessage(chatId: number, text: string, options?: any): Promise<any>;
-  }
-}
-
 //! Dashboard specific types
 export interface TrendingVideo {
   id: string;
