@@ -20,6 +20,26 @@ const UserSchema = z.object({
   telegramChatId: z.number().optional(),
   telegramUsername: z.string().optional(),
   reeruToken: z.number().default(2),
+  youtube: z
+    .object({
+      accessToken: z.string(),
+      refreshToken: z.string(),
+      expiryDate: z.number(),
+      channelName: z.string(),
+      email: z.string(),
+      connected: z.boolean(),
+      connectedAt: z.date(),
+      uploads: z
+        .array(
+          z.object({
+            videoId: z.string(),
+            title: z.string(),
+            uploadedAt: z.date(),
+          })
+        )
+        .optional(),
+    })
+    .optional(),
 });
 
 const UserLoginSchema = z.object({
