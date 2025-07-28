@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, TrendingUp, Copy, CheckCircle } from "lucide-react";
 import { useState } from "react";
+import DownloadButton from "@/components/DownloadButton";
 
 interface VideoResultModalProps {
   isOpen: boolean;
@@ -179,16 +180,43 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                 </div>
 
                 {/* Download Button */}
-                <motion.a
-                  href={videoData.download_url}
-                  download
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="flex items-center justify-center gap-3 w-full py-4 px-6 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-xl font-semibold hover:shadow-lg hover:shadow-pink-500/25 transition-all duration-300"
+                <DownloadButton
+                  url={videoData.download_url}
+                  filename={`${videoData.title
+                    .replace(/[^a-z0-9]/gi, "_")
+                    .toLowerCase()}.mp4`}
+                  downloadMethod="direct"
+                  showProgress={false}
+                  style={{
+                    width: "100%",
+                    padding: "16px 24px",
+                    background: "linear-gradient(to right, #D68CB8, #ec4899)",
+                    color: "white",
+                    borderRadius: "12px",
+                    fontWeight: "600",
+                    fontSize: "16px",
+                    border: "none",
+                    cursor: "pointer",
+                    transition: "all 0.3s",
+                    boxShadow: "0 0 0 rgba(236, 72, 153, 0)",
+                  }}
+                  onStart={() => console.log("Download started")}
+                  onSuccess={() => console.log("Download completed")}
+                  onError={(error) => console.error("Download error:", error)}
+                  className="hover:shadow-lg hover:shadow-pink-500/25"
                 >
-                  <Download className="w-5 h-5" />
-                  Download Video
-                </motion.a>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "12px",
+                    }}
+                  >
+                    <Download style={{ width: "20px", height: "20px" }} />
+                    Download Video
+                  </div>
+                </DownloadButton>
               </div>
             </div>
           </motion.div>
