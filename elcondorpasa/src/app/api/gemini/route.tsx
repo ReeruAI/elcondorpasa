@@ -9,6 +9,7 @@ const encoder = new TextEncoder();
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate request method
     // Get userId from headers
     const userId = request.headers.get("x-userId");
 
