@@ -73,21 +73,19 @@ class CronService {
             0
           );
 
-          // Create personalized message based on history
-          let message = this.createPersonalizedMessage(today, userHistory);
-
-          const success = await NotificationService.notifyUser(
+          // Send multi-part personalized message
+          const success = await this.sendMultiPartMessage(
             user._id.toString(),
-            message,
-            "info"
+            today,
+            userHistory
           );
 
           if (success) {
             successCount++;
           }
 
-          // Delay 200ms untuk avoid rate limiting
-          await new Promise((resolve) => setTimeout(resolve, 200));
+          // Delay 1000ms untuk avoid rate limiting (increased from 200ms for multiple messages)
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         } catch (error) {
           console.error(`Error sending to user ${user._id}:`, error);
         }
@@ -101,79 +99,156 @@ class CronService {
     }
   }
 
-  // Create personalized message based on user history
-  private createPersonalizedMessage(
+  // Send multi-part message (header + video posts + footer)
+  private async sendMultiPartMessage(
+    userId: string,
     today: string,
     userHistory: History[]
-  ): string {
-    // Default messages
-    const defaultMessages = [
-      `🌅 *Selamat pagi!*\n\nHari ini adalah ${today}\n\nSemangat untuk hari yang produktif! 💪`,
-      `☀️ *Good Morning!*\n\n${today}\n\nWaktunya memulai hari dengan penuh semangat! 🚀`,
-      `🌄 *Morning Motivation*\n\n${today}\n\nSetiap hari adalah kesempatan baru untuk berkembang! ✨`,
-      `🌞 *Pagi yang Cerah*\n\n${today}\n\nMari mulai hari ini dengan hal-hal positif! 🌟`,
-    ];
+  ): Promise<boolean> {
+    try {
+      // Get user preferences and videos
+      const { contentPreference, videos } = this.extractUserData(userHistory);
 
-    // If no history, return random default message
+      // 1. Send Header
+      const headerMessage = this.createHeaderMessage(contentPreference);
+      const headerSuccess = await NotificationService.notifyUser(
+        userId,
+        headerMessage,
+        "info"
+      );
+
+      if (!headerSuccess) return false;
+
+      // Small delay between messages
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // 2. Send Video Posts (if any)
+      if (videos && videos.length > 0) {
+        for (let i = 0; i < videos.length; i++) {
+          const videoMessage = this.createVideoMessage(i + 1, videos[i]);
+
+          // Send video message with button
+          const videoSuccess = await NotificationService.notifyUserWithButton(
+            userId,
+            videoMessage,
+            "info",
+            {
+              text: "🚀 Generate Short/Reel",
+              callback_data: `/generateVideo ${videos[i]}`,
+            }
+          );
+
+          if (!videoSuccess) {
+            console.error(`Failed to send video ${i + 1} to user ${userId}`);
+          }
+
+          // Small delay between video messages
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      } else {
+        // Send message if no videos available
+        const noVideosMessage =
+          "🎬 *No recent videos found*\n\nStart exploring videos to get personalized recommendations! Use /recommend";
+        await NotificationService.notifyUser(userId, noVideosMessage, "info");
+      }
+
+      // Small delay before footer
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // 3. Send Footer
+      const footerMessage = this.createFooterMessage();
+      const footerSuccess = await NotificationService.notifyUser(
+        userId,
+        footerMessage,
+        "info"
+      );
+
+      return footerSuccess;
+    } catch (error) {
+      console.error("Error sending multi-part message:", error);
+      return false;
+    }
+  }
+
+  // Extract user data from history
+  private extractUserData(userHistory: History[]): {
+    contentPreference: string | null;
+    videos: string[];
+  } {
     if (!userHistory || userHistory.length === 0) {
-      return defaultMessages[
-        Math.floor(Math.random() * defaultMessages.length)
-      ];
+      return { contentPreference: null, videos: [] };
     }
 
-    // Get user's preferences from latest history
     const latestHistory = userHistory[0];
     const contentPreference = latestHistory.contentPreference;
-    const languagePreference = latestHistory.languagePreference;
 
     // Get 5 newest video URLs from the most recent history entry
-    const recentVideoUrls = latestHistory.videos
+    const videos = latestHistory.videos
       .slice(-5) // Get last 5 videos from the array
       .map((video) => video.videoUrl);
 
-    // Create personalized message based on preferences
-    let personalizedMessage = `🌅 *Selamat pagi!*\n\n${today}\n\n`;
+    return { contentPreference, videos };
+  }
 
-    // Add content preference specific message
+  // Create header message
+  private createHeaderMessage(contentPreference: string | null): string {
+    let message = "📢 *Good day Reeruser!*\n\n";
+
     if (contentPreference) {
-      personalizedMessage += `✨ Berdasarkan minat Anda pada *${contentPreference}*, `;
-
-      switch (contentPreference.toLowerCase()) {
-        case "technology":
-          personalizedMessage +=
-            "semoga hari ini penuh dengan inovasi dan pembelajaran baru! 💻\n\n";
-          break;
-        case "education":
-          personalizedMessage +=
-            "mari tingkatkan pengetahuan kita hari ini! 📚\n\n";
-          break;
-        case "entertainment":
-          personalizedMessage +=
-            "jangan lupa untuk bersantai dan menikmati hiburan favorit Anda! 🎬\n\n";
-          break;
-        case "music":
-          personalizedMessage +=
-            "semoga musik membuat hari Anda lebih bersemangat! 🎵\n\n";
-          break;
-        default:
-          personalizedMessage += "semoga hari Anda menyenangkan! 🌟\n\n";
-      }
-    }
-
-    // Add YouTube URLs for ReeruAI shorts generation
-    if (recentVideoUrls.length > 0) {
-      personalizedMessage += `🎬 *Here are some videos you can generate into shorts with ReeruAI for today:*\n\n`;
-      recentVideoUrls.forEach((url, index) => {
-        personalizedMessage += `${index + 1}. ${url}\n`;
-      });
-      personalizedMessage +=
-        "\n_Generate amazing shorts with these videos! 🚀_";
+      // Format content preference for display
+      const formattedPreference =
+        this.formatContentPreference(contentPreference);
+      message += `✨ Based on your interest in *${formattedPreference}*, we've got today's top picks for you! ✨\n\n`;
     } else {
-      personalizedMessage +=
-        "_Start exploring videos to get personalized recommendations! Use /recommend_";
+      message += "✨ We've got today's top video picks for you! ✨\n\n";
     }
 
-    return personalizedMessage;
+    message +=
+      "Turn them into viral Shorts & Reels effortlessly with *ReeruAI* – as easy as 1‑2‑3! 🚀";
+
+    return message;
+  }
+
+  // Format content preference for display
+  private formatContentPreference(preference: string): string {
+    const preferenceMap: Record<string, string> = {
+      technology: "Technology",
+      education: "Education",
+      entertainment: "Entertainment",
+      music: "Music",
+      gaming: "Gaming",
+      game: "Games & Esports",
+      esports: "Games & Esports",
+      sports: "Sports",
+      fitness: "Fitness & Health",
+      cooking: "Cooking & Food",
+      travel: "Travel & Adventure",
+      fashion: "Fashion & Style",
+      comedy: "Comedy",
+      news: "News & Current Affairs",
+    };
+
+    return preferenceMap[preference.toLowerCase()] || preference;
+  }
+
+  // Create video message
+  private createVideoMessage(index: number, videoUrl: string): string {
+    return `🎬 *Video ${index}:*\n${videoUrl}\n\nTap below to instantly create an engaging Short/Reel with auto-captions! ⬇️`;
+  }
+
+  // Create footer message
+  private createFooterMessage(): string {
+    return `✨ *Why ReeruAI?*
+
+Create viral Shorts/Reels with automatic captions in just 3 simple steps:
+
+1️⃣ Pick your video
+2️⃣ Let AI find the best viral moments
+3️⃣ Get ready-to-post Shorts/Reels
+
+No hassle. No editing headaches. Just pure content magic! ✨
+
+👉 [Try ReeruAI Now!](https://reeru.ai)`;
   }
 
   // Get user statistics for more personalization

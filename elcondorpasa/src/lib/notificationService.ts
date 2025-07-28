@@ -56,6 +56,140 @@ class NotificationService {
   }
 
   /**
+   * Kirim notifikasi dengan inline keyboard button
+   */
+  static async notifyUserWithButton(
+    userId: string,
+    message: string,
+    type: "info" | "success" | "warning" | "error" = "info",
+    button: {
+      text: string;
+      callback_data?: string;
+      url?: string;
+    }
+  ): Promise<boolean> {
+    try {
+      // Get user dari database
+      const user = await UserModel.getUserProfile(userId);
+
+      if (!user.telegramChatId) {
+        console.log(`❌ User ${userId} doesn't have Telegram connected`);
+        return false;
+      }
+
+      // Format message berdasarkan type
+      let formattedMessage = message;
+      switch (type) {
+        case "success":
+          formattedMessage = `✅ ${message}`;
+          break;
+        case "warning":
+          formattedMessage = `⚠️ ${message}`;
+          break;
+        case "error":
+          formattedMessage = `❌ ${message}`;
+          break;
+        case "info":
+        default:
+          formattedMessage = `ℹ️ ${message}`;
+          break;
+      }
+
+      const botManager = TelegramBotManager.getInstance();
+      const bot = await botManager.getBot();
+      if (!bot) {
+        console.log("❌ Bot not available");
+        return false;
+      }
+
+      // Create inline keyboard
+      const inlineKeyboard = {
+        inline_keyboard: [[button]],
+      };
+
+      await bot.sendMessage(user.telegramChatId, formattedMessage, {
+        parse_mode: "Markdown",
+        reply_markup: inlineKeyboard,
+      });
+
+      console.log(`✅ Notification with button sent to ${user.telegramChatId}`);
+      return true;
+    } catch (error: any) {
+      console.log("❌ Notification service error:", error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Kirim notifikasi dengan multiple buttons
+   */
+  static async notifyUserWithButtons(
+    userId: string,
+    message: string,
+    type: "info" | "success" | "warning" | "error" = "info",
+    buttons: Array<{
+      text: string;
+      callback_data?: string;
+      url?: string;
+    }>,
+    buttonsPerRow: number = 1
+  ): Promise<boolean> {
+    try {
+      // Get user dari database
+      const user = await UserModel.getUserProfile(userId);
+
+      if (!user.telegramChatId) {
+        console.log(`❌ User ${userId} doesn't have Telegram connected`);
+        return false;
+      }
+
+      // Format message berdasarkan type
+      let formattedMessage = message;
+      switch (type) {
+        case "success":
+          formattedMessage = `✅ ${message}`;
+          break;
+        case "warning":
+          formattedMessage = `⚠️ ${message}`;
+          break;
+        case "error":
+          formattedMessage = `❌ ${message}`;
+          break;
+        case "info":
+        default:
+          formattedMessage = `ℹ️ ${message}`;
+          break;
+      }
+
+      const botManager = TelegramBotManager.getInstance();
+      const bot = await botManager.getBot();
+      if (!bot) {
+        console.log("❌ Bot not available");
+        return false;
+      }
+
+      // Create inline keyboard with multiple buttons
+      const inline_keyboard = [];
+      for (let i = 0; i < buttons.length; i += buttonsPerRow) {
+        inline_keyboard.push(buttons.slice(i, i + buttonsPerRow));
+      }
+
+      await bot.sendMessage(user.telegramChatId, formattedMessage, {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard },
+      });
+
+      console.log(
+        `✅ Notification with multiple buttons sent to ${user.telegramChatId}`
+      );
+      return true;
+    } catch (error: any) {
+      console.log("❌ Notification service error:", error.message);
+      return false;
+    }
+  }
+
+  /**
    * Broadcast ke semua user yang connect Telegram
    */
   static async broadcastToAll(

@@ -13,6 +13,202 @@ console.log("🤖 Telegram Bot started successfully");
 console.log("🔧 Initializing CronService in telegramBot.ts");
 const cronService = CronService.getInstance();
 
+// Helper function to process video with Klap API
+const processVideoWithKlap = async (
+  videoUrl: string,
+  chatId: number,
+  userId: number
+) => {
+  // Update the API_URL to point to the correct endpoint
+  const API_URL = `${
+    process.env.API_BASE_URL || "http://localhost:3000"
+  }/api/klap`;
+  let messageId: number | undefined;
+  let lastProgress = 0;
+
+  try {
+    // Update the fetch call to use the new API_URL
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ video_url: videoUrl }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    if (!reader) {
+      throw new Error("No response body");
+    }
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+
+      // Keep the last incomplete line in the buffer
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+
+            const data = JSON.parse(jsonStr);
+            console.log("📊 Klap API Update:", data.status, data.message);
+
+            // Update progress message based on status
+            if (data.progress !== undefined && data.progress !== lastProgress) {
+              const progressBar =
+                "█".repeat(Math.floor(data.progress / 10)) +
+                "░".repeat(10 - Math.floor(data.progress / 10));
+
+              let statusEmoji = "⏳";
+              if (data.status === "creating_task") statusEmoji = "🚀";
+              else if (data.status === "processing") statusEmoji = "🔄";
+              else if (data.status === "exporting_short") statusEmoji = "📦";
+              else if (data.status === "completed") statusEmoji = "✅";
+              else if (data.status === "error") statusEmoji = "❌";
+
+              const progressMessage =
+                `${statusEmoji} *Generating Short/Reel*\n\n` +
+                `📊 Status: ${data.message}\n` +
+                `📈 Progress: [${progressBar}] ${data.progress}%\n\n` +
+                `${data.task_id ? `🆔 Task ID: ${data.task_id}\n` : ""}` +
+                `⏱️ Please wait...`;
+
+              if (messageId) {
+                try {
+                  await bot.editMessageText(progressMessage, {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    parse_mode: "Markdown",
+                  });
+                } catch (editError) {
+                  // Message might be identical, ignore error
+                }
+              } else {
+                const sentMessage = await bot.sendMessage(
+                  chatId,
+                  progressMessage,
+                  {
+                    parse_mode: "Markdown",
+                  }
+                );
+                messageId = sentMessage.message_id;
+              }
+
+              lastProgress = data.progress;
+            }
+
+            // Handle completion
+            if (data.status === "completed" && data.short) {
+              const short = data.short;
+              const completionMessage =
+                `✅ *Video Ready!*\n\n` +
+                `🎬 *Title:* ${short.title}\n` +
+                `🎯 *Virality Score:* ${short.virality_score}/100\n` +
+                `⏱️ *Duration:* ${Math.round(short.duration)}s\n\n` +
+                `💡 *Analysis:*\n_${short.description}_\n\n` +
+                `📝 *Caption suggestion:*\n${
+                  short.captions || "No caption generated"
+                }\n\n` +
+                `🔗 *Original:* [View on YouTube](${videoUrl})`;
+
+              if (messageId) {
+                await bot.editMessageText(completionMessage, {
+                  chat_id: chatId,
+                  message_id: messageId,
+                  parse_mode: "Markdown",
+                  disable_web_page_preview: true,
+                });
+              }
+
+              // If download URL is available, send the video
+              if (short.download_url) {
+                await bot.sendMessage(
+                  chatId,
+                  "📥 *Downloading your short...*",
+                  {
+                    parse_mode: "Markdown",
+                  }
+                );
+
+                try {
+                  await bot.sendVideo(chatId, short.download_url, {
+                    caption: `🎬 *${short.title}*\n\n${short.captions || ""}`,
+                    parse_mode: "Markdown",
+                  });
+                } catch (videoError) {
+                  // If sending as video fails, send download link
+                  await bot.sendMessage(
+                    chatId,
+                    `📥 *Download your short:*\n${short.download_url}`,
+                    { parse_mode: "Markdown" }
+                  );
+                }
+              }
+            }
+
+            // Handle errors
+            if (data.status === "error") {
+              const errorMessage =
+                `❌ *Processing Failed*\n\n` +
+                `Error: ${data.message}\n` +
+                `${data.error ? `\nDetails: ${data.error}` : ""}`;
+
+              if (messageId) {
+                await bot.editMessageText(errorMessage, {
+                  chat_id: chatId,
+                  message_id: messageId,
+                  parse_mode: "Markdown",
+                });
+              } else {
+                await bot.sendMessage(chatId, errorMessage, {
+                  parse_mode: "Markdown",
+                });
+              }
+              break;
+            }
+          } catch (parseError) {
+            console.error("Error parsing SSE data:", parseError);
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error("❌ Klap API Error:", error);
+
+    const errorMessage =
+      `❌ *Error*\n\n` +
+      `Failed to process your video.\n` +
+      `Error: ${error.message || "Unknown error"}\n\n` +
+      `Please try again later or contact support.`;
+
+    if (messageId) {
+      await bot.editMessageText(errorMessage, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: "Markdown",
+      });
+    } else {
+      await bot.sendMessage(chatId, errorMessage, {
+        parse_mode: "Markdown",
+      });
+    }
+  }
+};
+
 // Helper function untuk link account dengan proper error handling
 const linkAccount = async (
   email: string,
@@ -66,6 +262,80 @@ const linkAccount = async (
     }
   }
 };
+
+// Handle callback queries (button clicks)
+bot.on("callback_query", async (query: any) => {
+  const chatId = query.message.chat.id;
+  const data = query.data;
+  const messageId = query.message.message_id;
+  const userId = query.from.id;
+  const userName = query.from.first_name;
+
+  console.log(`🔘 Callback query from ${userName} (${userId}): ${data}`);
+
+  // Handle /generateVideo callback
+  if (data.startsWith("/generateVideo ")) {
+    const videoUrl = data.replace("/generateVideo ", "");
+
+    try {
+      // Answer callback query immediately to remove loading state
+      await bot.answerCallbackQuery(query.id, {
+        text: "🎬 Processing your video...",
+        show_alert: false,
+      });
+
+      // Send processing message
+      await bot.sendMessage(
+        chatId,
+        `🎬 *Generating Short/Reel*\n\n` +
+          `Processing video:\n${videoUrl}\n\n` +
+          `⏳ This may take a moment. We'll notify you when it's ready!`,
+        {
+          parse_mode: "Markdown",
+          reply_to_message_id: messageId,
+        }
+      );
+
+      // TODO: Add actual video processing logic here
+      // For now, we'll just simulate the process
+
+      // You can call your API endpoint here to process the video
+      // Example:
+      // const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
+      // const result = await axios.post(`${API_URL}/api/video/generate`, {
+      //   videoUrl,
+      //   userId,
+      //   chatId
+      // });
+      await processVideoWithKlap(videoUrl, chatId, userId);
+
+      // For testing, send a success message after 2 seconds
+      setTimeout(async () => {
+        await bot.sendMessage(
+          chatId,
+          `✅ *Video Ready!*\n\n` +
+            `Your Short/Reel has been generated successfully!\n\n` +
+            `🎬 Original: ${videoUrl}\n` +
+            `📱 View your Short/Reel in the ReeruAI dashboard`,
+          { parse_mode: "Markdown" }
+        );
+      }, 2000);
+    } catch (error: any) {
+      console.error("❌ Error handling callback query:", error);
+
+      await bot.answerCallbackQuery(query.id, {
+        text: "❌ Error processing request",
+        show_alert: true,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        `❌ *Error*\n\nFailed to process your video. Please try again later.`,
+        { parse_mode: "Markdown" }
+      );
+    }
+  }
+});
 
 // Handle incoming messages
 bot.on("message", async (msg: any) => {
@@ -197,6 +467,33 @@ bot.onText(/\/status/, async (msg: any) => {
       `Jika sudah terhubung, bot akan memberitahu bahwa akun sudah terhubung.`,
     { parse_mode: "Markdown" }
   );
+});
+
+// Handle /testReminder command (for testing daily reminder)
+bot.onText(/\/testReminder/, async (msg: any) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  console.log(`🧪 Test reminder requested by ${userId}`);
+
+  try {
+    // Test the daily reminder for this specific user
+    await cronService.testDailyReminder();
+
+    await bot.sendMessage(
+      chatId,
+      `✅ *Test Reminder Sent*\n\nCheck your messages for the daily reminder format!`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (error: any) {
+    console.error("❌ Error testing reminder:", error);
+
+    await bot.sendMessage(
+      chatId,
+      `❌ *Error*\n\nFailed to send test reminder. Please make sure your account is linked.`,
+      { parse_mode: "Markdown" }
+    );
+  }
 });
 
 // Error handling untuk polling
