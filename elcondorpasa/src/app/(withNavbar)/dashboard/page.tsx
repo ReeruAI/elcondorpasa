@@ -9,6 +9,7 @@ import { TrendingUp, Loader2, History } from "lucide-react";
 // Components
 import { LoadingModal } from "@/components/dashboard/LoadingModal";
 import { VideoOptionsModal } from "@/components/dashboard/VideoOptionsModal";
+import { VideoResultModal } from "@/components/dashboard/VideoResultModal";
 import { PreferenceSetup } from "@/components/dashboard/PreferenceSetup";
 import { StreamingProgress } from "@/components/dashboard/StreamingProgress";
 import { UrlInputSection } from "@/components/dashboard/UrlInputSection";
@@ -21,6 +22,7 @@ import {
   UserPreferences,
   KlapStreamData,
   ProcessingState,
+  VideoResult,
 } from "@/types";
 
 // Utils
@@ -65,6 +67,10 @@ export default function Dashboard() {
     message: "",
     status: "idle",
   });
+
+  // Video result state
+  const [videoResult, setVideoResult] = useState<VideoResult | null>(null);
+  const [showResultModal, setShowResultModal] = useState(false);
 
   const router = useRouter();
   const trendingSliderRef = useRef<HTMLDivElement>(
@@ -321,10 +327,15 @@ export default function Dashboard() {
 
           // Save the result if needed
           if (data.short) {
-            // You can save the short data or redirect
-            setTimeout(() => {
-              router.push("/clips");
-            }, 2000);
+            const result: VideoResult = {
+              title: data.short.title,
+              virality_score: data.short.virality_score,
+              captions: data.short.captions,
+              download_url: data.short.download_url,
+            };
+            setVideoResult(result);
+            setShowLoadingModal(false);
+            setShowResultModal(true);
           }
         },
         // onError
@@ -408,9 +419,15 @@ export default function Dashboard() {
           });
 
           if (data.short) {
-            setTimeout(() => {
-              router.push("/clips");
-            }, 2000);
+            const result: VideoResult = {
+              title: data.short.title,
+              virality_score: data.short.virality_score,
+              captions: data.short.captions,
+              download_url: data.short.download_url,
+            };
+            setVideoResult(result);
+            setShowLoadingModal(false);
+            setShowResultModal(true);
           }
         },
         // onError
@@ -484,6 +501,14 @@ export default function Dashboard() {
         video={selectedVideo}
         onGenerateClip={handleGenerateClip}
         isProcessing={processingState.isProcessing}
+      />
+      <VideoResultModal
+        isOpen={showResultModal}
+        onClose={() => {
+          setShowResultModal(false);
+          setVideoResult(null);
+        }}
+        videoData={videoResult}
       />
 
       <div className="min-h-screen bg-[#1D1D1D] text-white">

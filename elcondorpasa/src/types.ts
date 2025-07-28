@@ -163,7 +163,7 @@ export interface ScrollDirection {
   direction: "left" | "right";
 }
 
-// Klap API Types
+//! Klap API Types
 export interface KlapStreamData {
   status: string;
   message: string;
@@ -195,4 +195,16 @@ export interface ProcessingState {
   progress: number;
   message: string;
   status: string;
+}
+
+export interface VideoResult {
+  title: string;
+  virality_score: number;
+  captions: {
+    tiktok: string;
+    youtube: string;
+    linkedin: string;
+    instagram: string;
+  };
+  download_url: string;
 }

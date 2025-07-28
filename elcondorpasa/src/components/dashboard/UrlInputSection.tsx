@@ -68,7 +68,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
           )}
         </motion.button>
 
-        {onCheckProgress && (
+        {onCheckProgress && isProcessing && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
