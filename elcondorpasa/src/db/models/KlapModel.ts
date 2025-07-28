@@ -3,6 +3,13 @@ import { ObjectId } from "mongodb";
 
 interface UserShort {
   title: string;
+  virality_score: number;
+  captions: {
+    tiktok: string;
+    youtube: string;
+    linkedin: string;
+    instagram: string;
+  };
   download_url: string;
   created_at?: Date;
 }
@@ -15,8 +22,125 @@ interface UserShortsDocument {
   updatedAt?: Date;
 }
 
+interface UserDocument {
+  _id: ObjectId;
+  username: string;
+  name: string;
+  email: string;
+  password: string;
+  reeruToken: number;
+  isProcessingVideo?: boolean;
+}
+
+interface UserPreference {
+  userId: string;
+  languagePreference?: string;
+}
+
 class KlapModel {
-  private static collectionName = "usershorts";
+  private static userShortsCollection = "usershorts";
+  private static usersCollection = "users";
+  private static preferencesCollection = "preferences";
+
+  // ========== User Token Management ==========
+
+  /**
+   * Get user's token count
+   */
+  static async getUserTokenCount(userId: string): Promise<number> {
+    try {
+      const collection = database.collection<UserDocument>(
+        this.usersCollection
+      );
+      const user = await collection.findOne({ _id: new ObjectId(userId) });
+      return user?.reeruToken || 0;
+    } catch (error) {
+      console.error("❌ Error getting user token count:", error);
+      return 0;
+    }
+  }
+
+  /**
+   * Deduct one token from user
+   */
+  static async deductUserToken(userId: string): Promise<boolean> {
+    try {
+      const collection = database.collection<UserDocument>(
+        this.usersCollection
+      );
+
+      const result = await collection.updateOne(
+        { _id: new ObjectId(userId), reeruToken: { $gt: 0 } },
+        { $inc: { reeruToken: -1 } }
+      );
+
+      return result.modifiedCount > 0;
+    } catch (error) {
+      console.error("❌ Error deducting user token:", error);
+      return false;
+    }
+  }
+
+  // ========== Processing Status Management ==========
+
+  /**
+   * Set user's video processing status
+   */
+  static async setUserProcessingStatus(
+    userId: string,
+    isProcessing: boolean
+  ): Promise<boolean> {
+    try {
+      const collection = database.collection<UserDocument>(
+        this.usersCollection
+      );
+
+      if (isProcessing) {
+        // Try to set processing flag only if it's not already set
+        const result = await collection.updateOne(
+          { _id: new ObjectId(userId), isProcessingVideo: { $ne: true } },
+          { $set: { isProcessingVideo: true } }
+        );
+        return result.modifiedCount > 0;
+      } else {
+        // Clear processing flag
+        await collection.updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { isProcessingVideo: false } }
+        );
+        return true;
+      }
+    } catch (error) {
+      console.error("❌ Error setting user processing status:", error);
+      return false;
+    }
+  }
+
+  // ========== User Preferences ==========
+
+  /**
+   * Get user's language preference
+   */
+  static async getUserLanguagePreference(userId: string): Promise<string> {
+    try {
+      const collection = database.collection<UserPreference>(
+        this.preferencesCollection
+      );
+      const userPreference = await collection.findOne({ userId });
+
+      if (userPreference?.languagePreference) {
+        // Map language preference to Klap API format
+        return userPreference.languagePreference === "Indonesia" ? "id" : "en";
+      }
+
+      return "en"; // Default to English
+    } catch (error) {
+      console.error("❌ Error fetching user language preference:", error);
+      return "en"; // Default to English on error
+    }
+  }
+
+  // ========== Shorts Management ==========
 
   /**
    * Add a new short to user's collection
@@ -24,11 +148,21 @@ class KlapModel {
    */
   static async addUserShort(
     userId: string,
-    short: { title: string; download_url: string }
+    short: {
+      title: string;
+      virality_score: number;
+      captions: {
+        tiktok: string;
+        youtube: string;
+        linkedin: string;
+        instagram: string;
+      };
+      download_url: string;
+    }
   ): Promise<void> {
     try {
       const collection = database.collection<UserShortsDocument>(
-        this.collectionName
+        this.userShortsCollection
       );
 
       const shortWithTimestamp: UserShort = {
@@ -73,7 +207,7 @@ class KlapModel {
   static async getUserShorts(userId: string): Promise<UserShort[]> {
     try {
       const collection = database.collection<UserShortsDocument>(
-        this.collectionName
+        this.userShortsCollection
       );
 
       const userDoc = await collection.findOne({ userid: userId });
@@ -99,7 +233,7 @@ class KlapModel {
   static async getUserShortsCount(userId: string): Promise<number> {
     try {
       const collection = database.collection<UserShortsDocument>(
-        this.collectionName
+        this.userShortsCollection
       );
 
       const result = await collection
@@ -125,7 +259,7 @@ class KlapModel {
   ): Promise<boolean> {
     try {
       const collection = database.collection<UserShortsDocument>(
-        this.collectionName
+        this.userShortsCollection
       );
 
       const result = await collection.updateOne(
@@ -144,6 +278,34 @@ class KlapModel {
           error instanceof Error ? error.message : "Unknown error"
         }`
       );
+    }
+  }
+
+  /**
+   * Get a specific short by download_url
+   */
+  static async getUserShortByUrl(
+    userId: string,
+    downloadUrl: string
+  ): Promise<UserShort | null> {
+    try {
+      const collection = database.collection<UserShortsDocument>(
+        this.userShortsCollection
+      );
+
+      const result = await collection
+        .aggregate([
+          { $match: { userid: userId } },
+          { $unwind: "$shorts" },
+          { $match: { "shorts.download_url": downloadUrl } },
+          { $replaceRoot: { newRoot: "$shorts" } },
+        ])
+        .toArray();
+
+      return (result[0] as UserShort) || null;
+    } catch (error) {
+      console.error("❌ Error fetching specific short:", error);
+      return null;
     }
   }
 }
