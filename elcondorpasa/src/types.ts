@@ -208,3 +208,21 @@ export interface VideoResult {
   };
   download_url: string;
 }
+
+//! Types for YouTube integration
+export interface YouTubeData {
+  accessToken: string;
+  refreshToken: string;
+  expiryDate: number;
+  channelName: string;
+  email: string;
+  connected: boolean;
+  connectedAt: Date;
+  uploads?: YouTubeUpload[];
+}
+
+export interface YouTubeUpload {
+  videoId: string;
+  title: string;
+  uploadedAt: Date;
+}

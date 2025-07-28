@@ -159,7 +159,6 @@ export async function POST(request: NextRequest) {
 
           const taskPayload = {
             source_video_url: video_url,
-            language: language,
             target_clip_count: 1,
             max_clip_count: 1,
             min_duration: 15,

@@ -138,5 +138,6 @@ export const config = {
     "/api/midtrans/:path*",
     "/api/klap/:path*",
     "/api/user-shorts/:path*",
+    "/api/youtube/:path*",
   ],
 };
