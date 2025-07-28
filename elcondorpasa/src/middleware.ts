@@ -136,5 +136,6 @@ export const config = {
     // API routes with optional authentication
     "/api/gemini/:path*",
     "/api/midtrans/:path*",
+    "/api/klap/:path*",
   ],
 };

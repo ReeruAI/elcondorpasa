@@ -1,48 +1,144 @@
 import { NextRequest, NextResponse } from "next/server";
+import KlapModel from "@/db/models/KlapModel";
+import { database } from "@/db/config/mongodb";
 
 const KLAP_API_KEY = process.env.KLAP_API_KEY as string;
 
 export async function POST(request: NextRequest) {
+  console.log("🚀 Klap API route called");
+
   try {
     const body = await request.json();
     const { video_url } = body;
+    console.log("📹 Video URL received:", video_url);
 
     if (!video_url) {
       return NextResponse.json({ error: "Missing video_url" }, { status: 400 });
     }
 
     if (!KLAP_API_KEY) {
+      console.error("❌ KLAP_API_KEY not found in environment");
       return NextResponse.json(
         { error: "Missing KLAP_API_KEY" },
         { status: 500 }
       );
     }
 
+    // Get userId from headers
+    const userId = request.headers.get("x-userId");
+    console.log("👤 User ID from headers:", userId);
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized - User ID not found" },
+        { status: 401 }
+      );
+    }
+
+    console.log("🌊 Creating ReadableStream for SSE");
+
     // Create a ReadableStream for Server-Sent Events
     const stream = new ReadableStream({
       async start(controller) {
+        console.log("📡 Stream started");
         const encoder = new TextEncoder();
 
-        // Helper function to send SSE data
-        const sendUpdate = (data: any) => {
-          const message = `data: ${JSON.stringify(data)}\n\n`;
-          controller.enqueue(encoder.encode(message));
+        // Helper function to send SSE data with proper await
+        const sendUpdate = async (data: any) => {
+          try {
+            const timestamp = new Date().toISOString();
+            const message = `data: ${JSON.stringify({
+              ...data,
+              timestamp,
+            })}\n\n`;
+            console.log(`📤 [${timestamp}] Sending update:`, data);
+
+            controller.enqueue(encoder.encode(message));
+
+            // Force flush by yielding control
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            return true;
+          } catch (error) {
+            console.error("❌ Error sending update:", error);
+            return false;
+          }
         };
 
         try {
           // Send initial progress
-          sendUpdate({
+          console.log("📝 Sending initial progress");
+          await sendUpdate({
             status: "starting",
             message: "Initializing video processing...",
             progress: 0,
           });
 
+          // Get user's language preference
+          console.log("🔍 Fetching user preferences for userId:", userId);
+          await sendUpdate({
+            status: "fetching_preferences",
+            message: "Fetching user preferences...",
+            progress: 5,
+          });
+
+          let language = "en"; // Default language
+
+          try {
+            const preferencesCollection = database.collection("preferences");
+            const userPreference = await preferencesCollection.findOne({
+              userId,
+            });
+            console.log("📋 User preference found:", userPreference);
+
+            if (userPreference && userPreference.languagePreference) {
+              // Map language preference to Klap API format
+              language =
+                userPreference.languagePreference === "Indonesia" ? "id" : "en";
+              console.log("🌐 Language mapped to:", language);
+            }
+
+            await sendUpdate({
+              status: "preferences_loaded",
+              message: `Language set to: ${
+                language === "id" ? "Indonesian" : "English"
+              }`,
+              progress: 8,
+            });
+          } catch (prefError) {
+            console.error("❌ Error fetching preferences:", prefError);
+            await sendUpdate({
+              status: "preferences_error",
+              message:
+                "Could not fetch preferences, using default language: English",
+              progress: 8,
+            });
+          }
+
           // 1. Start video-to-shorts task
-          sendUpdate({
+          console.log("🎬 Creating video-to-shorts task");
+          await sendUpdate({
             status: "creating_task",
             message: "Creating video-to-shorts task...",
             progress: 10,
           });
+
+          const taskPayload = {
+            source_video_url: video_url,
+            language: language,
+            target_clip_count: 1,
+            max_clip_count: 1,
+            editing_options: {
+              captions: true,
+              reframe: true,
+              emojis: true,
+              intro_title: true,
+              remove_silences: false,
+              width: 1080,
+              height: 1920,
+            },
+          };
+          console.log("📦 Task payload:", taskPayload);
 
           const taskResponse = await fetch(
             "https://api.klap.app/v2/tasks/video-to-shorts",
@@ -52,29 +148,17 @@ export async function POST(request: NextRequest) {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${KLAP_API_KEY}`,
               },
-              body: JSON.stringify({
-                source_video_url: video_url,
-                language: "en",
-                // Request only 1 clip to minimize costs
-                target_clip_count: 1,
-                max_clip_count: 1,
-                editing_options: {
-                  captions: true,
-                  reframe: true,
-                  emojis: true,
-                  intro_title: true,
-                  remove_silences: false,
-                  width: 1080,
-                  height: 1920,
-                },
-              }),
+              body: JSON.stringify(taskPayload),
             }
           );
+
+          console.log("📨 Task response status:", taskResponse.status);
 
           const contentType = taskResponse.headers.get("content-type");
           if (!contentType || !contentType.includes("application/json")) {
             const textResponse = await taskResponse.text();
-            sendUpdate({
+            console.error("❌ Non-JSON response:", textResponse);
+            await sendUpdate({
               status: "error",
               message: "API returned non-JSON response",
               error: textResponse.substring(0, 200),
@@ -84,9 +168,11 @@ export async function POST(request: NextRequest) {
           }
 
           const taskData = await taskResponse.json();
+          console.log("📋 Task data received:", taskData);
 
           if (!taskResponse.ok) {
-            sendUpdate({
+            console.error("❌ Task creation failed:", taskData);
+            await sendUpdate({
               status: "error",
               message: "Task creation failed",
               error: taskData.message || JSON.stringify(taskData),
@@ -98,7 +184,8 @@ export async function POST(request: NextRequest) {
           const { id: task_id } = taskData;
 
           if (!task_id) {
-            sendUpdate({
+            console.error("❌ No task_id in response");
+            await sendUpdate({
               status: "error",
               message: "No task_id returned from API",
             });
@@ -106,7 +193,8 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          sendUpdate({
+          console.log("✅ Task created with ID:", task_id);
+          await sendUpdate({
             status: "task_created",
             message: `Task ${task_id} created successfully. Starting processing...`,
             progress: 20,
@@ -120,10 +208,13 @@ export async function POST(request: NextRequest) {
           const delay = (ms: number) =>
             new Promise((res) => setTimeout(res, ms));
 
+          console.log("🔄 Starting polling loop");
+
           for (let attempt = 0; attempt < maxRetries; attempt++) {
             const progress = Math.min(20 + (attempt / maxRetries) * 50, 70);
 
-            sendUpdate({
+            console.log(`🔄 Polling attempt ${attempt + 1}/${maxRetries}`);
+            await sendUpdate({
               status: "processing",
               message: `Processing video... (${attempt + 1}/${maxRetries})`,
               progress: Math.round(progress),
@@ -141,18 +232,23 @@ export async function POST(request: NextRequest) {
               }
             );
 
+            console.log(`📊 Poll response status: ${pollRes.status}`);
+
             const pollContentType = pollRes.headers.get("content-type");
             if (
               !pollContentType ||
               !pollContentType.includes("application/json")
             ) {
+              console.warn("⚠️ Non-JSON poll response, retrying...");
               await delay(15000);
               continue;
             }
 
             const pollData = await pollRes.json();
+            console.log(`📊 Poll data status: ${pollData.status}`);
 
             if (!pollRes.ok) {
+              console.warn("⚠️ Poll request not OK, retrying...");
               await delay(15000);
               continue;
             }
@@ -165,7 +261,8 @@ export async function POST(request: NextRequest) {
               status === "completed"
             ) {
               result = pollData;
-              sendUpdate({
+              console.log("✅ Task completed!", status);
+              await sendUpdate({
                 status: "processing_complete",
                 message: "Video processing completed! Starting export...",
                 progress: 75,
@@ -173,7 +270,8 @@ export async function POST(request: NextRequest) {
               });
               break;
             } else if (status === "failed" || status === "error") {
-              sendUpdate({
+              console.error("❌ Task failed:", pollData);
+              await sendUpdate({
                 status: "error",
                 message: "Task processing failed",
                 error: pollData,
@@ -186,7 +284,8 @@ export async function POST(request: NextRequest) {
           }
 
           if (!["ready", "done", "completed"].includes(status)) {
-            sendUpdate({
+            console.error("❌ Task timeout, final status:", status);
+            await sendUpdate({
               status: "error",
               message: "Task not completed in time",
               final_status: status,
@@ -197,9 +296,11 @@ export async function POST(request: NextRequest) {
 
           // Extract output_id (folder_id in this case)
           const output_id = result.output_id;
+          console.log("📁 Output ID:", output_id);
 
           if (!output_id) {
-            sendUpdate({
+            console.error("❌ No output_id in result:", result);
+            await sendUpdate({
               status: "error",
               message: "No output_id returned",
               result_data: result,
@@ -209,7 +310,8 @@ export async function POST(request: NextRequest) {
           }
 
           // 3. Fetch project data - IT RETURNS AN ARRAY!
-          sendUpdate({
+          console.log("🎥 Fetching project data for:", output_id);
+          await sendUpdate({
             status: "starting_export",
             message: "Fetching generated shorts...",
             progress: 80,
@@ -225,9 +327,12 @@ export async function POST(request: NextRequest) {
             }
           );
 
+          console.log("📽️ Project response status:", projectRes.status);
+
           if (!projectRes.ok) {
             const errorText = await projectRes.text();
-            sendUpdate({
+            console.error("❌ Failed to fetch shorts:", errorText);
+            await sendUpdate({
               status: "error",
               message: "Failed to fetch shorts after task completion",
               error: errorText,
@@ -238,9 +343,11 @@ export async function POST(request: NextRequest) {
 
           // The API returns an array directly!
           const shorts = await projectRes.json();
+          console.log("🎬 Shorts received:", shorts.length, "shorts");
 
           if (!Array.isArray(shorts) || shorts.length === 0) {
-            sendUpdate({
+            console.error("❌ No shorts in response");
+            await sendUpdate({
               status: "error",
               message: "No shorts were generated",
               progress: 85,
@@ -257,8 +364,14 @@ export async function POST(request: NextRequest) {
           );
 
           const bestShort = sortedShorts[0];
+          console.log(
+            "🏆 Best short selected:",
+            bestShort.name,
+            "Score:",
+            bestShort.virality_score
+          );
 
-          sendUpdate({
+          await sendUpdate({
             status: "found_shorts",
             message: `Found ${shorts.length} short. Exporting it...`,
             progress: 85,
@@ -272,7 +385,8 @@ export async function POST(request: NextRequest) {
           });
 
           // 4. Export only the best short
-          sendUpdate({
+          console.log("📤 Starting export for short:", bestShort.id);
+          await sendUpdate({
             status: "exporting_short",
             message: `Exporting "${bestShort.name}"...`,
             progress: 90,
@@ -283,27 +397,31 @@ export async function POST(request: NextRequest) {
 
           try {
             // Note: The export endpoint uses folder_id/project_id format
-            const exportRes = await fetch(
-              `https://api.klap.app/v2/projects/${bestShort.folder_id}/${bestShort.id}/exports`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${KLAP_API_KEY}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({}),
-              }
-            );
+            const exportUrl = `https://api.klap.app/v2/projects/${bestShort.folder_id}/${bestShort.id}/exports`;
+            console.log("📤 Export URL:", exportUrl);
+
+            const exportRes = await fetch(exportUrl, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${KLAP_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({}),
+            });
+
+            console.log("📤 Export response status:", exportRes.status);
 
             if (!exportRes.ok) {
               const errorText = await exportRes.text();
+              console.error("❌ Export creation failed:", errorText);
               throw new Error(`Export creation failed: ${errorText}`);
             }
 
             const exportData = await exportRes.json();
             const exportId = exportData.id;
+            console.log("✅ Export created with ID:", exportId);
 
-            sendUpdate({
+            await sendUpdate({
               status: "waiting_export",
               message: `Waiting for export to complete...`,
               progress: 92,
@@ -315,11 +433,19 @@ export async function POST(request: NextRequest) {
             let exportResult = null;
             const maxExportRetries = 40;
 
+            console.log("🔄 Starting export polling");
+
             for (
               let exportAttempt = 0;
               exportAttempt < maxExportRetries;
               exportAttempt++
             ) {
+              console.log(
+                `🔄 Export poll attempt ${
+                  exportAttempt + 1
+                }/${maxExportRetries}`
+              );
+
               const statusRes = await fetch(
                 `https://api.klap.app/v2/projects/${bestShort.folder_id}/${bestShort.id}/exports/${exportId}`,
                 {
@@ -332,6 +458,7 @@ export async function POST(request: NextRequest) {
               if (statusRes.ok) {
                 const statusData = await statusRes.json();
                 exportStatus = statusData.status;
+                console.log(`📊 Export status: ${exportStatus}`);
 
                 if (
                   exportStatus === "ready" ||
@@ -339,7 +466,8 @@ export async function POST(request: NextRequest) {
                   exportStatus === "completed"
                 ) {
                   exportResult = statusData;
-                  sendUpdate({
+                  console.log("✅ Export completed!");
+                  await sendUpdate({
                     status: "export_complete",
                     message: `Export completed!`,
                     progress: 95,
@@ -350,6 +478,7 @@ export async function POST(request: NextRequest) {
                   exportStatus === "failed" ||
                   exportStatus === "error"
                 ) {
+                  console.error("❌ Export failed");
                   throw new Error("Export failed");
                 }
               }
@@ -357,8 +486,48 @@ export async function POST(request: NextRequest) {
               await delay(10000);
             }
 
+            // Save to database before sending final completion
+            const downloadUrl =
+              exportResult?.src_url || exportResult?.download_url || null;
+            console.log("💾 Download URL:", downloadUrl);
+
+            if (downloadUrl) {
+              console.log("💾 Saving to database...");
+              await sendUpdate({
+                status: "saving_to_database",
+                message: "Saving short to database...",
+                progress: 98,
+              });
+
+              try {
+                await KlapModel.addUserShort(userId, {
+                  title: bestShort.name,
+                  download_url: downloadUrl,
+                });
+
+                console.log("✅ Database save successful");
+                await sendUpdate({
+                  status: "database_saved",
+                  message: "Successfully saved to database!",
+                  progress: 99,
+                });
+              } catch (dbError) {
+                console.error("❌ Database save error:", dbError);
+                await sendUpdate({
+                  status: "database_error",
+                  message:
+                    "Warning: Could not save to database, but export was successful",
+                  error:
+                    dbError instanceof Error
+                      ? dbError.message
+                      : "Unknown database error",
+                });
+              }
+            }
+
             // Send final completion with the single best short
-            sendUpdate({
+            console.log("🎉 Sending final completion");
+            await sendUpdate({
               status: "completed",
               message: "Successfully exported the best short!",
               progress: 100,
@@ -372,13 +541,13 @@ export async function POST(request: NextRequest) {
                 description: bestShort.virality_score_explanation,
                 captions: bestShort.publication_captions,
                 export_status: exportStatus,
-                download_url:
-                  exportResult?.src_url || exportResult?.download_url || null,
+                download_url: downloadUrl,
                 export_id: exportId,
               },
             });
           } catch (error) {
-            sendUpdate({
+            console.error("❌ Export error:", error);
+            await sendUpdate({
               status: "error",
               message: "Export failed",
               error: error instanceof Error ? error.message : String(error),
@@ -390,9 +559,11 @@ export async function POST(request: NextRequest) {
             });
           }
 
+          console.log("🏁 Closing stream");
           controller.close();
         } catch (error) {
-          sendUpdate({
+          console.error("❌ Stream error:", error);
+          await sendUpdate({
             status: "error",
             message: "Internal server error occurred",
             error: error instanceof Error ? error.message : String(error),
@@ -402,19 +573,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Return the stream as Server-Sent Events
+    console.log("📡 Returning SSE response");
+    // Return the stream as Server-Sent Events with improved headers
     return new NextResponse(stream, {
       headers: {
         "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
         Connection: "keep-alive",
+        "X-Accel-Buffering": "no", // Disable nginx buffering
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Headers": "Content-Type, x-userId",
       },
     });
   } catch (error) {
-    console.error("Klap processing error:", error);
+    console.error("❌ Klap processing error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }
