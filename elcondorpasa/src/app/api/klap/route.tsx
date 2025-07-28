@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import KlapModel from "@/db/models/KlapModel";
-import { database } from "@/db/config/mongodb";
 
 const KLAP_API_KEY = process.env.KLAP_API_KEY as string;
 
@@ -35,6 +34,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check user token balance
+    const tokenCount = await KlapModel.getUserTokenCount(userId);
+    console.log("🪙 User token count:", tokenCount);
+
+    if (tokenCount <= 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Insufficient tokens. Please purchase more tokens to continue.",
+        },
+        { status: 402 } // Payment Required
+      );
+    }
+
+    // Check if user is already processing a video
+    const canProcess = await KlapModel.setUserProcessingStatus(userId, true);
+    if (!canProcess) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have a video being processed. Please wait for it to complete.",
+        },
+        { status: 429 } // Too Many Requests
+      );
+    }
+
     console.log("🌊 Creating ReadableStream for SSE");
 
     // Create a ReadableStream for Server-Sent Events
@@ -42,6 +67,16 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         console.log("📡 Stream started");
         const encoder = new TextEncoder();
+        let isProcessingFlagCleared = false;
+
+        // Helper function to clear processing flag
+        const clearProcessingFlag = async () => {
+          if (!isProcessingFlagCleared) {
+            await KlapModel.setUserProcessingStatus(userId, false);
+            isProcessingFlagCleared = true;
+            console.log("🔓 Processing flag cleared");
+          }
+        };
 
         // Helper function to send SSE data with proper await
         const sendUpdate = async (data: any) => {
@@ -72,6 +107,27 @@ export async function POST(request: NextRequest) {
             status: "starting",
             message: "Initializing video processing...",
             progress: 0,
+            tokens_remaining: tokenCount,
+          });
+
+          // Deduct token
+          const tokenDeducted = await KlapModel.deductUserToken(userId);
+          if (!tokenDeducted) {
+            await sendUpdate({
+              status: "error",
+              message: "Failed to deduct token. Please try again.",
+            });
+            await clearProcessingFlag();
+            controller.close();
+            return;
+          }
+
+          console.log("🪙 Token deducted successfully");
+          await sendUpdate({
+            status: "token_deducted",
+            message: "Token deducted. Processing video...",
+            progress: 2,
+            tokens_remaining: tokenCount - 1,
           });
 
           // Get user's language preference
@@ -82,38 +138,16 @@ export async function POST(request: NextRequest) {
             progress: 5,
           });
 
-          let language = "en"; // Default language
+          const language = await KlapModel.getUserLanguagePreference(userId);
+          console.log("🌐 Language set to:", language);
 
-          try {
-            const preferencesCollection = database.collection("preferences");
-            const userPreference = await preferencesCollection.findOne({
-              userId,
-            });
-            console.log("📋 User preference found:", userPreference);
-
-            if (userPreference && userPreference.languagePreference) {
-              // Map language preference to Klap API format
-              language =
-                userPreference.languagePreference === "Indonesia" ? "id" : "en";
-              console.log("🌐 Language mapped to:", language);
-            }
-
-            await sendUpdate({
-              status: "preferences_loaded",
-              message: `Language set to: ${
-                language === "id" ? "Indonesian" : "English"
-              }`,
-              progress: 8,
-            });
-          } catch (prefError) {
-            console.error("❌ Error fetching preferences:", prefError);
-            await sendUpdate({
-              status: "preferences_error",
-              message:
-                "Could not fetch preferences, using default language: English",
-              progress: 8,
-            });
-          }
+          await sendUpdate({
+            status: "preferences_loaded",
+            message: `Language set to: ${
+              language === "id" ? "Indonesian" : "English"
+            }`,
+            progress: 8,
+          });
 
           // 1. Start video-to-shorts task
           console.log("🎬 Creating video-to-shorts task");
@@ -128,6 +162,9 @@ export async function POST(request: NextRequest) {
             language: language,
             target_clip_count: 1,
             max_clip_count: 1,
+            min_duration: 15,
+            max_duration: 60,
+            target_duration: 50,
             editing_options: {
               captions: true,
               reframe: true,
@@ -163,6 +200,7 @@ export async function POST(request: NextRequest) {
               message: "API returned non-JSON response",
               error: textResponse.substring(0, 200),
             });
+            await clearProcessingFlag();
             controller.close();
             return;
           }
@@ -177,10 +215,11 @@ export async function POST(request: NextRequest) {
               message: "Task creation failed",
               error: taskData.message || JSON.stringify(taskData),
             });
+            await clearProcessingFlag();
             controller.close();
             return;
           }
-
+          // Check if task_id is present
           const { id: task_id } = taskData;
 
           if (!task_id) {
@@ -189,6 +228,7 @@ export async function POST(request: NextRequest) {
               status: "error",
               message: "No task_id returned from API",
             });
+            await clearProcessingFlag();
             controller.close();
             return;
           }
@@ -276,6 +316,7 @@ export async function POST(request: NextRequest) {
                 message: "Task processing failed",
                 error: pollData,
               });
+              await clearProcessingFlag();
               controller.close();
               return;
             }
@@ -290,6 +331,7 @@ export async function POST(request: NextRequest) {
               message: "Task not completed in time",
               final_status: status,
             });
+            await clearProcessingFlag();
             controller.close();
             return;
           }
@@ -305,6 +347,7 @@ export async function POST(request: NextRequest) {
               message: "No output_id returned",
               result_data: result,
             });
+            await clearProcessingFlag();
             controller.close();
             return;
           }
@@ -337,6 +380,7 @@ export async function POST(request: NextRequest) {
               message: "Failed to fetch shorts after task completion",
               error: errorText,
             });
+            await clearProcessingFlag();
             controller.close();
             return;
           }
@@ -353,6 +397,7 @@ export async function POST(request: NextRequest) {
               progress: 85,
               project_id: output_id,
             });
+            await clearProcessingFlag();
             controller.close();
             return;
           }
@@ -500,8 +545,18 @@ export async function POST(request: NextRequest) {
               });
 
               try {
+                // Format captions for all platforms
+                const formattedCaptions = {
+                  tiktok: bestShort.publication_captions?.tiktok || "",
+                  youtube: bestShort.publication_captions?.youtube || "",
+                  linkedin: bestShort.publication_captions?.linkedin || "",
+                  instagram: bestShort.publication_captions?.instagram || "",
+                };
+
                 await KlapModel.addUserShort(userId, {
                   title: bestShort.name,
+                  virality_score: bestShort.virality_score,
+                  captions: formattedCaptions,
                   download_url: downloadUrl,
                 });
 
@@ -532,6 +587,7 @@ export async function POST(request: NextRequest) {
               message: "Successfully exported the best short!",
               progress: 100,
               project_id: output_id,
+              tokens_remaining: tokenCount - 1,
               short: {
                 id: bestShort.id,
                 title: bestShort.name,
@@ -559,7 +615,8 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          console.log("🏁 Closing stream");
+          console.log("🏁 Clearing processing flag and closing stream");
+          await clearProcessingFlag();
           controller.close();
         } catch (error) {
           console.error("❌ Stream error:", error);
@@ -568,6 +625,7 @@ export async function POST(request: NextRequest) {
             message: "Internal server error occurred",
             error: error instanceof Error ? error.message : String(error),
           });
+          await clearProcessingFlag();
           controller.close();
         }
       },
