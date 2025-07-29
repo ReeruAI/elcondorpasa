@@ -6,12 +6,16 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 // Constants
 const CACHE_TTL = 5 * 24 * 60 * 60; // 5 days in seconds
-const USER_HISTORY_TTL = 2 * 24 * 60 * 60; // 2 days for seen videos
+const USER_HISTORY_TTL = 5 * 24 * 60 * 60; // 5 days for seen videos (match your requirement)
 const DAILY_REFRESH_LIMIT = 2; // Initial load + 1 refresh = 10 videos total
 const VIDEOS_PER_REQUEST = 5;
 const MIN_DURATION_MINUTES = 30;
+const MAX_DURATION_MINUTES = 150; // Maximum 2.5 hours
 const MIN_VIEW_COUNT = 100000;
-const MAX_API_RESULTS = 40; // Your API limit constraint
+const MAX_API_RESULTS = 40;
+const POOL_REFRESH_THRESHOLD = 10; // Minimum videos needed in pool
+const MAX_SEARCH_ATTEMPTS = 3; // Maximum attempts to find new videos
+const MIN_ACCEPTABLE_VIDEOS = 3; // Minimum videos to return (relax if needed)
 
 // Types
 interface CachedVideo {
@@ -31,6 +35,12 @@ interface VideoPool {
   query: string;
 }
 
+interface UserDayCache {
+  videos: CachedVideo[];
+  refreshCount: number;
+  date: string;
+}
+
 /**
  * Generate a cache key for content/language combination
  */
@@ -38,7 +48,6 @@ function getPoolKey(
   contentPreference: string,
   languagePreference: string
 ): string {
-  // Simple combination: "Tech_EN" or "Entertainment_ID"
   const content = contentPreference.substring(0, 3);
   const lang = languagePreference === "English" ? "EN" : "ID";
   return `pool:${content}${lang}`;
@@ -52,7 +61,77 @@ function getUserKeys(userId: string) {
   return {
     refreshCount: `user:${userId}:refresh:${today}`,
     seenVideos: `user:${userId}:seen`,
+    todayCache: `user:${userId}:today:${today}`, // Cache today's delivered videos
   };
+}
+
+/**
+ * Acquire lock to prevent race conditions
+ */
+async function acquireUserLock(
+  userId: string,
+  ttl: number = 10
+): Promise<boolean> {
+  const lockKey = `lock:${userId}:recommendations`;
+  const result = await redis.set(lockKey, "1", "EX", ttl, "NX");
+  return result === "OK";
+}
+
+/**
+ * Release user lock
+ */
+async function releaseUserLock(userId: string): Promise<void> {
+  const lockKey = `lock:${userId}:recommendations`;
+  await redis.del(lockKey);
+}
+
+/**
+ * Validate and fix TTL for seen videos
+ */
+async function validateSeenVideos(userId: string): Promise<void> {
+  const { seenVideos } = getUserKeys(userId);
+  const ttl = await redis.ttl(seenVideos);
+
+  // If TTL is missing or too low, reset it
+  if (ttl < 0 || ttl < USER_HISTORY_TTL / 2) {
+    await redis.expire(seenVideos, USER_HISTORY_TTL);
+  }
+}
+
+/**
+ * Get or set today's cache for user (handles the reroll scenario)
+ */
+async function getUserTodayCache(userId: string): Promise<UserDayCache | null> {
+  const { todayCache } = getUserKeys(userId);
+  const cached = await redis.get(todayCache);
+  if (!cached) return null;
+
+  try {
+    return JSON.parse(cached);
+  } catch {
+    return null;
+  }
+}
+
+async function setUserTodayCache(
+  userId: string,
+  videos: CachedVideo[],
+  refreshCount: number
+): Promise<void> {
+  const { todayCache } = getUserKeys(userId);
+  const cache: UserDayCache = {
+    videos,
+    refreshCount,
+    date: new Date().toISOString().split("T")[0],
+  };
+
+  // Expire at end of day
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const ttl = Math.floor((tomorrow.getTime() - Date.now()) / 1000);
+
+  await redis.set(todayCache, JSON.stringify(cache), "EX", ttl);
 }
 
 /**
@@ -78,7 +157,6 @@ async function incrementRefreshCount(userId: string): Promise<void> {
   const { refreshCount } = getUserKeys(userId);
   const current = await redis.incr(refreshCount);
 
-  // Set expiry to end of day if this is the first refresh
   if (current === 1) {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -89,7 +167,7 @@ async function incrementRefreshCount(userId: string): Promise<void> {
 }
 
 /**
- * Get videos the user has seen in the last 2 days
+ * Get videos the user has seen in the last 5 days
  */
 async function getUserSeenVideos(userId: string): Promise<Set<string>> {
   const { seenVideos } = getUserKeys(userId);
@@ -145,6 +223,25 @@ async function cacheVideoPool(
 }
 
 /**
+ * Append videos to existing pool
+ */
+async function appendToVideoPool(
+  poolKey: string,
+  newVideos: CachedVideo[]
+): Promise<void> {
+  const existingPool = await getCachedPool(poolKey);
+  if (!existingPool) return;
+
+  // Add new videos, avoiding duplicates
+  const existingIds = new Set(existingPool.videos.map((v) => v.videoId));
+  const uniqueNewVideos = newVideos.filter((v) => !existingIds.has(v.videoId));
+
+  existingPool.videos.push(...uniqueNewVideos);
+
+  await redis.set(poolKey, JSON.stringify(existingPool), "EX", CACHE_TTL);
+}
+
+/**
  * Convert ISO 8601 duration to minutes
  */
 function parseDurationToMinutes(duration: string): number {
@@ -171,12 +268,13 @@ function formatDuration(duration: string): string {
  */
 async function generateSearchQuery(
   contentPreference: string,
-  languagePreference: string
+  languagePreference: string,
+  modifier: string = ""
 ): Promise<string> {
   const prompt = `Generate ONE concise YouTube search query for finding trending podcast content.
 
 Input:
-- Content: ${contentPreference}
+- Content: ${contentPreference} ${modifier}
 - Language: ${languagePreference}
 
 Requirements:
@@ -202,20 +300,29 @@ Return ONLY the search query, no explanation.`;
 }
 
 /**
- * Search YouTube and get video details in one go
+ * Search YouTube with relaxed criteria if needed
  */
-async function searchYouTubeWithDetails(query: string): Promise<any[]> {
+async function searchYouTubeWithRelaxedCriteria(
+  query: string,
+  attemptNumber: number = 1
+): Promise<any[]> {
   const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
   if (!YOUTUBE_API_KEY) {
     throw new Error("YOUTUBE_API_KEY environment variable is required");
   }
 
-  // Search parameters
-  const oneMonthAgo = new Date();
-  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-  const publishedAfter = oneMonthAgo.toISOString();
+  // Progressively relax criteria based on attempt number
+  const monthsBack = attemptNumber; // 1 month, then 2, then 3
+  const minDuration = Math.max(20, MIN_DURATION_MINUTES - attemptNumber * 5); // 30, 25, 20
+  const minViews = Math.max(
+    10000,
+    MIN_VIEW_COUNT / Math.pow(10, attemptNumber)
+  ); // 100k, 10k, 1k
 
-  // Step 1: Search for videos
+  const searchDate = new Date();
+  searchDate.setMonth(searchDate.getMonth() - monthsBack);
+  const publishedAfter = searchDate.toISOString();
+
   const searchUrl =
     `https://www.googleapis.com/youtube/v3/search?` +
     `part=snippet&type=video&videoDuration=long&order=viewCount` +
@@ -232,7 +339,6 @@ async function searchYouTubeWithDetails(query: string): Promise<any[]> {
 
   if (videos.length === 0) return [];
 
-  // Step 2: Get video details
   const videoIds = videos.map((v: any) => v.id.videoId).join(",");
   const detailsUrl =
     `https://www.googleapis.com/youtube/v3/videos?` +
@@ -246,7 +352,6 @@ async function searchYouTubeWithDetails(query: string): Promise<any[]> {
   const detailsData = await detailsResponse.json();
   const videoDetails = detailsData.items || [];
 
-  // Combine and filter results
   return videos
     .map((video: any) => {
       const details = videoDetails.find((d: any) => d.id === video.id.videoId);
@@ -272,8 +377,9 @@ async function searchYouTubeWithDetails(query: string): Promise<any[]> {
     })
     .filter(
       (video: any) =>
-        video.durationMinutes >= MIN_DURATION_MINUTES &&
-        video.viewCount >= MIN_VIEW_COUNT
+        video.durationMinutes >= minDuration &&
+        video.durationMinutes <= MAX_DURATION_MINUTES &&
+        video.viewCount >= minViews
     );
 }
 
@@ -310,7 +416,6 @@ Be specific and enthusiastic. Response only with the reasoning text.`;
       } has attracted ${video.viewCount.toLocaleString()} views, indicating strong audience engagement with ${contentPreference} content.`
     );
   } catch (error) {
-    // Fallback reasoning
     return `This trending podcast from ${video.creator} offers ${
       video.durationMinutes
     } minutes of ${contentPreference} content, with ${video.viewCount.toLocaleString()} views demonstrating its popularity and relevance.`;
@@ -329,7 +434,45 @@ export async function* getYouTubeRecommendations(
   void,
   unknown
 > {
+  // Acquire lock to prevent race conditions
+  const lockAcquired = await acquireUserLock(userId);
+  if (!lockAcquired) {
+    yield `⏳ Another request is in progress. Please wait a moment and try again.\n`;
+    return;
+  }
+
   try {
+    // Validate seen videos TTL
+    await validateSeenVideos(userId);
+
+    // Check if we already served videos today (handles reroll case)
+    const todayCache = await getUserTodayCache(userId);
+    if (todayCache && todayCache.refreshCount >= DAILY_REFRESH_LIMIT) {
+      yield `📊 Daily limit reached. Returning your previous selection...\n\n`;
+
+      // When refresh is exhausted, always return the last 5 videos
+      // Don't filter by seen status - user explicitly wants their last selection
+      const lastVideos = todayCache.videos.slice(-5);
+
+      if (lastVideos.length === 0) {
+        yield `❌ No videos found in today's cache. This shouldn't happen!\n`;
+        return;
+      }
+
+      yield `🔄 Returning your last ${lastVideos.length} video recommendations.\n\n`;
+
+      for (const video of lastVideos) {
+        yield {
+          type: "video",
+          data: video,
+        };
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      yield `\n✅ These are your videos for today! Come back tomorrow for fresh content.\n`;
+      return;
+    }
+
     // Check refresh limit
     yield `📊 Checking refresh limit for today...\n`;
     const { canRefresh, count } = await canUserRefresh(userId);
@@ -341,127 +484,318 @@ export async function* getYouTubeRecommendations(
 
     yield `✅ Refresh ${count + 1}/${DAILY_REFRESH_LIMIT} for today\n\n`;
 
-    // Get pool key and check cache
+    // Get pool key and user's seen videos
     const poolKey = getPoolKey(contentPreference, languagePreference);
-    yield `🔍 Checking cache for ${contentPreference}/${languagePreference} content...\n`;
-
-    let videoPool = await getCachedPool(poolKey);
-
-    if (videoPool && videoPool.videos.length >= VIDEOS_PER_REQUEST) {
-      yield `🎯 Cache hit! Found ${videoPool.videos.length} videos in pool\n\n`;
-    } else {
-      // Need to fetch new videos
-      yield `💫 Cache miss or insufficient videos. Fetching fresh content...\n\n`;
-
-      // Generate search query
-      yield `🧠 Generating optimized search query...\n`;
-      const searchQuery = await generateSearchQuery(
-        contentPreference,
-        languagePreference
-      );
-      yield `✅ Search query: "${searchQuery}"\n\n`;
-
-      // Search YouTube (single API call)
-      yield `🔍 Searching YouTube for trending podcasts...\n`;
-      const searchResults = await searchYouTubeWithDetails(searchQuery);
-      yield `✅ Found ${searchResults.length} videos matching criteria\n\n`;
-
-      if (searchResults.length === 0) {
-        yield `❌ No videos found matching criteria. Try different preferences.\n`;
-        return;
-      }
-
-      // Sort by view count and take more than needed for variety
-      searchResults.sort((a, b) => b.viewCount - a.viewCount);
-      const topVideos = searchResults.slice(
-        0,
-        Math.min(20, searchResults.length)
-      );
-
-      // Analyze videos with Gemini
-      yield `🤖 Analyzing videos for quality insights...\n\n`;
-      const analyzedVideos: CachedVideo[] = [];
-
-      for (const video of topVideos) {
-        const reasoning = await analyzeVideoWithGemini(
-          video,
-          contentPreference
-        );
-
-        analyzedVideos.push({
-          videoId: video.videoId,
-          title: video.title,
-          creator: video.creator,
-          thumbnailUrl: video.thumbnailUrl,
-          videoUrl: video.videoUrl,
-          viewCount: video.viewCount,
-          duration: formatDuration(video.duration),
-          reasoning,
-        });
-      }
-
-      // Cache the pool
-      yield `💾 Caching ${analyzedVideos.length} videos for future use...\n`;
-      await cacheVideoPool(poolKey, analyzedVideos, searchQuery);
-
-      videoPool = {
-        videos: analyzedVideos,
-        timestamp: Date.now(),
-        query: searchQuery,
-      };
-
-      yield `✅ Cache updated successfully\n\n`;
-    }
-
-    // Get user's seen videos
-    yield `🔄 Processing personalization...\n`;
     const seenVideoIds = await getUserSeenVideos(userId);
 
-    // Filter out seen videos
-    const unseenVideos = videoPool.videos.filter(
-      (video) => !seenVideoIds.has(video.videoId)
-    );
+    yield `🔍 Checking for unseen content...\n`;
+    yield `📚 You've seen ${seenVideoIds.size} videos in the last 5 days\n\n`;
 
-    if (unseenVideos.length < VIDEOS_PER_REQUEST) {
-      yield `⚠️ Not enough unseen videos. Showing some recent videos.\n`;
-      // If not enough unseen videos, just take from the pool
+    // Get cached pool
+    let videoPool = await getCachedPool(poolKey);
+
+    // Calculate available unseen videos
+    let unseenVideos: CachedVideo[] = [];
+    if (videoPool) {
+      unseenVideos = videoPool.videos.filter(
+        (video) => !seenVideoIds.has(video.videoId)
+      );
+    }
+
+    // Check if we need to fetch more videos
+    const needMoreVideos =
+      !videoPool || unseenVideos.length < POOL_REFRESH_THRESHOLD;
+
+    if (needMoreVideos) {
+      yield `💫 Need more videos. Fetching fresh content...\n\n`;
+
+      let searchAttempt = 1;
+      let totalAnalyzedVideos: CachedVideo[] = [];
+      let allSeenVideoIds = new Set(seenVideoIds);
+
+      while (
+        searchAttempt <= MAX_SEARCH_ATTEMPTS &&
+        totalAnalyzedVideos.length < POOL_REFRESH_THRESHOLD
+      ) {
+        // Generate search query with variations
+        yield `🧠 Generating search query (attempt ${searchAttempt}/${MAX_SEARCH_ATTEMPTS})...\n`;
+
+        const queryModifiers = ["", "trending", "popular", "best", "viral"];
+        const modifier = queryModifiers[searchAttempt - 1] || "";
+
+        const searchQuery = await generateSearchQuery(
+          contentPreference,
+          languagePreference,
+          modifier
+        );
+        yield `✅ Search query: "${searchQuery}"\n\n`;
+
+        // Search YouTube with progressively relaxed criteria
+        yield `🔍 Searching YouTube for trending podcasts...\n`;
+        const searchResults = await searchYouTubeWithRelaxedCriteria(
+          searchQuery,
+          searchAttempt
+        );
+
+        if (searchAttempt > 1) {
+          yield `📉 Relaxed criteria: ${Math.max(
+            20,
+            MIN_DURATION_MINUTES - searchAttempt * 5
+          )}-${MAX_DURATION_MINUTES} minutes, ${Math.max(
+            10000,
+            MIN_VIEW_COUNT / Math.pow(10, searchAttempt)
+          ).toLocaleString()}+ views\n`;
+        }
+
+        yield `✅ Found ${searchResults.length} videos matching criteria\n\n`;
+
+        if (searchResults.length === 0) {
+          if (searchAttempt < MAX_SEARCH_ATTEMPTS) {
+            yield `🔄 No results. Trying with different criteria...\n\n`;
+            searchAttempt++;
+            continue;
+          } else {
+            yield `❌ No videos found after ${MAX_SEARCH_ATTEMPTS} attempts.\n`;
+            break;
+          }
+        }
+
+        // Filter out already seen videos
+        const newSearchResults = searchResults.filter(
+          (video) => !allSeenVideoIds.has(video.videoId)
+        );
+
+        yield `🎯 Found ${newSearchResults.length} new videos you haven't seen\n\n`;
+
+        if (newSearchResults.length === 0) {
+          if (searchAttempt < MAX_SEARCH_ATTEMPTS) {
+            yield `🔄 All videos already seen. Trying different search...\n\n`;
+            searchAttempt++;
+            continue;
+          } else {
+            yield `⚠️ No new unique videos found.\n`;
+            break;
+          }
+        }
+
+        // Sort by view count and analyze
+        newSearchResults.sort((a, b) => b.viewCount - a.viewCount);
+        const topVideos = newSearchResults.slice(
+          0,
+          Math.min(15, newSearchResults.length)
+        );
+
+        // Analyze videos with Gemini
+        yield `🤖 Analyzing ${topVideos.length} videos for quality insights...\n\n`;
+
+        for (const video of topVideos) {
+          // Skip if we already have enough
+          if (totalAnalyzedVideos.length >= POOL_REFRESH_THRESHOLD) break;
+
+          const reasoning = await analyzeVideoWithGemini(
+            video,
+            contentPreference
+          );
+
+          totalAnalyzedVideos.push({
+            videoId: video.videoId,
+            title: video.title,
+            creator: video.creator,
+            thumbnailUrl: video.thumbnailUrl,
+            videoUrl: video.videoUrl,
+            viewCount: video.viewCount,
+            duration: formatDuration(video.duration),
+            reasoning,
+          });
+
+          // Add to seen set to avoid duplicates in next iteration
+          allSeenVideoIds.add(video.videoId);
+        }
+
+        yield `✅ Analyzed ${totalAnalyzedVideos.length} total videos so far\n\n`;
+        searchAttempt++;
+      }
+
+      // Update cache with whatever we found
+      if (totalAnalyzedVideos.length > 0) {
+        if (!videoPool) {
+          yield `💾 Creating new video pool with ${totalAnalyzedVideos.length} videos...\n`;
+          await cacheVideoPool(poolKey, totalAnalyzedVideos, "multi-search");
+        } else {
+          yield `💾 Adding ${totalAnalyzedVideos.length} new videos to pool...\n`;
+          await appendToVideoPool(poolKey, totalAnalyzedVideos);
+        }
+      } else {
+        yield `❌ Unable to find any suitable videos for this preference combination.\n`;
+        yield `💡 Consider trying different preferences or checking back later.\n`;
+      }
+
+      // Refresh our pool reference
+      videoPool = await getCachedPool(poolKey);
+      yield `✅ Pool now contains ${videoPool?.videos.length || 0} videos\n\n`;
+
+      // Recalculate unseen videos
+      unseenVideos = videoPool
+        ? videoPool.videos.filter((video) => !seenVideoIds.has(video.videoId))
+        : [];
+    } else {
+      yield `🎯 Found ${unseenVideos.length} unseen videos in cache\n\n`;
     }
 
     // Select videos to return
-    const videosToReturn = unseenVideos.slice(0, VIDEOS_PER_REQUEST);
+    let videosToReturn: CachedVideo[] = [];
 
-    // If still not enough, fill with any videos from pool
-    if (videosToReturn.length < VIDEOS_PER_REQUEST) {
-      const needed = VIDEOS_PER_REQUEST - videosToReturn.length;
-      const fillerVideos = videoPool.videos
-        .filter((v) => !videosToReturn.some((vr) => vr.videoId === v.videoId))
-        .slice(0, needed);
-      videosToReturn.push(...fillerVideos);
+    // Handle insufficient unseen videos
+    if (unseenVideos.length < VIDEOS_PER_REQUEST) {
+      yield `⚠️ Only ${unseenVideos.length} unseen videos available.\n`;
+
+      // Check if we can accept fewer videos
+      if (unseenVideos.length >= MIN_ACCEPTABLE_VIDEOS) {
+        yield `📊 Proceeding with ${unseenVideos.length} videos (minimum ${MIN_ACCEPTABLE_VIDEOS} met).\n`;
+        videosToReturn = unseenVideos;
+      } else {
+        yield `🔄 Attempting emergency search for more content...\n`;
+
+        // Try multiple emergency searches with very relaxed criteria
+        const emergencyQueries = [
+          `${contentPreference} podcast discussion`,
+          `podcast ${
+            languagePreference === "Indonesian" ? "indonesia" : "english"
+          } talk`,
+          `${contentPreference} interview show`,
+          `trending podcast ${new Date().getFullYear()}`,
+        ];
+
+        for (const emergencyQuery of emergencyQueries) {
+          yield `🆘 Emergency search: "${emergencyQuery}"\n`;
+
+          // Search with very relaxed criteria
+          const emergencyResults = await searchYouTubeWithRelaxedCriteria(
+            emergencyQuery,
+            3
+          );
+          const newEmergencyVideos = emergencyResults.filter(
+            (video) =>
+              !seenVideoIds.has(video.videoId) &&
+              !unseenVideos.some((v) => v.videoId === video.videoId)
+          );
+
+          if (newEmergencyVideos.length > 0) {
+            yield `✅ Found ${newEmergencyVideos.length} emergency videos\n`;
+
+            // Quick analysis
+            for (const video of newEmergencyVideos.slice(0, 5)) {
+              const reasoning = await analyzeVideoWithGemini(
+                video,
+                contentPreference
+              );
+              unseenVideos.push({
+                videoId: video.videoId,
+                title: video.title,
+                creator: video.creator,
+                thumbnailUrl: video.thumbnailUrl,
+                videoUrl: video.videoUrl,
+                viewCount: video.viewCount,
+                duration: formatDuration(video.duration),
+                reasoning,
+              });
+
+              if (unseenVideos.length >= MIN_ACCEPTABLE_VIDEOS) break;
+            }
+
+            if (unseenVideos.length >= MIN_ACCEPTABLE_VIDEOS) break;
+          }
+        }
+
+        // Update pool with emergency videos
+        if (unseenVideos.length > 0) {
+          await appendToVideoPool(poolKey, unseenVideos);
+        }
+
+        videosToReturn = unseenVideos;
+      }
+    } else {
+      // We have enough videos
+      videosToReturn = unseenVideos.slice(0, VIDEOS_PER_REQUEST);
     }
 
-    yield `\n🎬 Streaming ${videosToReturn.length} personalized recommendations...\n\n`;
+    // Final deduplication check
+    const finalVideos: CachedVideo[] = [];
+    const returnedIds = new Set<string>();
+
+    for (const video of videosToReturn) {
+      if (!returnedIds.has(video.videoId)) {
+        finalVideos.push(video);
+        returnedIds.add(video.videoId);
+      }
+    }
+
+    if (finalVideos.length < videosToReturn.length) {
+      yield `🔍 Removed ${
+        videosToReturn.length - finalVideos.length
+      } duplicate(s) from selection.\n`;
+    }
+
+    if (finalVideos.length === 0) {
+      yield `❌ Unable to find any unique videos for this preference combination.\n`;
+      yield `\n💡 Suggestions:\n`;
+      yield `• Try a different content preference\n`;
+      yield `• Switch language preference\n`;
+      yield `• Check back tomorrow for new content\n`;
+      yield `• Contact support if this persists\n`;
+
+      // Log this scenario for monitoring
+      console.error(
+        `No videos found for user ${userId} with ${contentPreference}/${languagePreference}`
+      );
+
+      return;
+    }
+
+    // Warn if returning fewer than requested
+    if (finalVideos.length < VIDEOS_PER_REQUEST) {
+      yield `\n⚠️ Note: Only ${finalVideos.length} unique videos available (requested ${VIDEOS_PER_REQUEST}).\n`;
+      yield `This combination has limited content on YouTube.\n`;
+    }
+
+    yield `\n🎬 Streaming ${finalVideos.length} personalized recommendations...\n\n`;
 
     // Stream videos
-    for (const video of videosToReturn) {
+    for (const video of finalVideos) {
       yield {
         type: "video",
         data: video,
       };
-      // Small delay for streaming effect
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
-    // Update user's seen videos and refresh count
-    const returnedVideoIds = videosToReturn.map((v) => v.videoId);
+    // Update user's seen videos
+    const returnedVideoIds = finalVideos.map((v) => v.videoId);
     await markVideosAsSeen(userId, returnedVideoIds);
+
+    // Update today's cache (for reroll handling)
+    const existingToday = await getUserTodayCache(userId);
+    const allTodayVideos = existingToday
+      ? [...existingToday.videos, ...finalVideos]
+      : finalVideos;
+
+    await setUserTodayCache(userId, allTodayVideos, count + 1);
+
+    // Increment refresh count
     await incrementRefreshCount(userId);
 
     yield `\n✅ Recommendations delivered successfully!\n`;
+    yield `📊 You've now seen ${
+      seenVideoIds.size + returnedVideoIds.length
+    } unique videos total\n`;
   } catch (error) {
     console.error("Recommendation error:", error);
     yield `\n❌ Error: ${
       error instanceof Error ? error.message : "Unknown error"
     }\n`;
     throw error;
+  } finally {
+    // Always release lock
+    await releaseUserLock(userId);
   }
 }
