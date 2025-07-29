@@ -5,7 +5,11 @@ import { verifyToken } from "./helpers/jwt";
 // Define route groups
 const PROTECTED_ROUTES = ["/dashboard", "/preferences"];
 const AUTH_ROUTES = ["/login", "/register"];
-const API_ROUTES = ["/api/preferences", "/api/profile"];
+const API_ROUTES = [
+  "/api/preferences",
+  "/api/profile",
+  "/api/telegram/generate-otp",
+];
 const OPTIONAL_AUTH_ROUTES = ["/api/gemini", "/api/midtrans"];
 
 export async function middleware(request: NextRequest) {
@@ -23,6 +27,34 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith(route)
     );
 
+    // Special handling for Telegram requests to /api/klap
+    if (pathname === "/api/klap") {
+      const telegramChatId = request.headers.get("x-telegram-chat-id");
+
+      if (telegramChatId) {
+        console.log(
+          "📱 Telegram request detected for /api/klap, chatId:",
+          telegramChatId
+        );
+        return NextResponse.next();
+      }
+    }
+
+    // Special handling for OTP verify route (no auth required)
+    if (pathname === "/api/telegram/verify-otp") {
+      console.log("🔐 OTP verification request - no auth required");
+      return NextResponse.next();
+    }
+
+    // Special handling for email linking routes (no auth required)
+    if (
+      pathname === "/api/telegram/initiate-email-linking" ||
+      pathname === "/api/telegram/complete-email-linking"
+    ) {
+      console.log("📧 Email linking request - no auth required");
+      return NextResponse.next();
+    }
+
     // Handle unauthenticated users
     if (!token) {
       if (isProtectedRoute) {
@@ -33,12 +65,10 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      // For optional auth routes, continue without userId
       if (isOptionalAuthRoute) {
         return NextResponse.next();
       }
 
-      // Allow access to auth routes and other public routes
       return NextResponse.next();
     }
 
@@ -56,7 +86,6 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: "Invalid token" }, { status: 401 });
       }
 
-      // For optional auth routes, continue without userId even if token is invalid
       if (isOptionalAuthRoute) {
         console.error(
           "Invalid token, continuing without auth:",
@@ -133,11 +162,13 @@ export const config = {
     "/api/preferences/:path*",
     "/api/profile/:path*",
     "/api/history/:path*",
+    "/api/telegram/generate-otp/:path*",
     // API routes with optional authentication
     "/api/gemini/:path*",
     "/api/midtrans/:path*",
     "/api/klap/:path*",
     "/api/user-shorts/:path*",
     "/api/youtube/:path*",
+    "/api/telegram/verify-otp/:path*",
   ],
 };

@@ -30,6 +30,7 @@ interface UserDocument {
   password: string;
   reeruToken: number;
   isProcessingVideo?: boolean;
+  telegramChatId?: number; // Added for Telegram support
 }
 
 interface UserPreference {
@@ -41,6 +42,41 @@ class KlapModel {
   private static userShortsCollection = "usershorts";
   private static usersCollection = "users";
   private static preferencesCollection = "preferences";
+
+  // ========== Telegram Support ==========
+
+  /**
+   * Get userId from Telegram chatId
+   * @param chatId - Telegram chat ID
+   * @returns userId string if found, null if not found
+   */
+  static async getUserIdFromChatId(chatId: number): Promise<string | null> {
+    try {
+      console.log("🔍 Looking up userId for chatId:", chatId);
+
+      const collection = database.collection<UserDocument>(
+        this.usersCollection
+      );
+      const user = await collection.findOne(
+        {
+          telegramChatId: chatId,
+        },
+        { projection: { _id: 1 } }
+      );
+
+      if (!user) {
+        console.log("❌ No user found for chatId:", chatId);
+        return null;
+      }
+
+      const userId = user._id.toString();
+      console.log("✅ Found userId:", userId, "for chatId:", chatId);
+      return userId;
+    } catch (error) {
+      console.error("❌ Error getting userId from chatId:", error);
+      throw error;
+    }
+  }
 
   // ========== User Token Management ==========
 
