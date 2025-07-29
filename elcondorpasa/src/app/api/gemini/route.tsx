@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         try {
           const collectedVideos: any[] = [];
+          let isExhaustedRefresh = false; // Track if this is an exhausted refresh
 
           // Get recommendations (with caching and deduplication)
           const streamGenerator = getYouTubeRecommendations(
@@ -58,11 +59,22 @@ export async function POST(request: NextRequest) {
           // Stream the response
           for await (const chunk of streamGenerator) {
             if (typeof chunk === "string") {
+              // Check if this is an exhausted refresh response
+              if (
+                chunk.includes(
+                  "Daily limit reached. Returning your previous selection"
+                )
+              ) {
+                isExhaustedRefresh = true;
+              }
+
               // Progress updates
               let progressType = "general";
               if (chunk.includes("🎯 Cache hit!")) progressType = "cacheHit";
               else if (chunk.includes("📊 Checking refresh limit"))
                 progressType = "refreshCheck";
+              else if (chunk.includes("📊 Daily limit reached"))
+                progressType = "limitReached";
               else if (chunk.includes("🧠 Generating"))
                 progressType = "queryGeneration";
               else if (chunk.includes("🔍 Searching"))
@@ -93,8 +105,8 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Save to history database
-          if (collectedVideos.length > 0) {
+          // Save to history database ONLY if NOT exhausted refresh
+          if (collectedVideos.length > 0 && !isExhaustedRefresh) {
             try {
               const historyData = {
                 userId,
@@ -110,6 +122,8 @@ export async function POST(request: NextRequest) {
             } catch (dbError) {
               console.error("❌ Failed to save history:", dbError);
             }
+          } else if (isExhaustedRefresh) {
+            console.log("📝 Skipped history save - exhausted refresh request");
           }
 
           // Send completion message
@@ -123,6 +137,7 @@ export async function POST(request: NextRequest) {
             timestamp: new Date().toISOString(),
             contentPreference,
             languagePreference,
+            isExhaustedRefresh, // Include this flag in response
           })}\n\n`;
           controller.enqueue(encoder.encode(completionData));
 
