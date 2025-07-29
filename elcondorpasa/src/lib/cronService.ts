@@ -45,6 +45,15 @@ class CronService {
     await this.sendDailyReminder();
   }
 
+  // logic untuk hit route gemini/route.tsx secara otomatis saat daily reminder
+  /*
+  1. untuk dapat userId mungkin bisa ambil dari chatId, atau mungkin bisa pakai cara seperti di line 68 (get semua user yang connect Telegram)
+  2. ambil data userHistory dari database denan menggunakan getHistoryByUserId
+  3. jika tidak ada userHistorynya maka hit route.tsx
+  4. cek createdAt nya apakah tanggalnya hari ini.
+  5. jika iya tidak perlu hit route.tsx lagi, jika tidak maka hit route.tsx
+  */
+
   // Logic untuk daily reminder
   private async sendDailyReminder() {
     try {

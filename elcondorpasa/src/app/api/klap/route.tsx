@@ -23,19 +23,64 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get userId from headers
+    // Get userId from headers (web) or chatId (telegram)
     const userId = request.headers.get("x-userId");
-    console.log("👤 User ID from headers:", userId);
+    const chatId = request.headers.get("x-telegram-chat-id");
 
-    if (!userId) {
+    console.log("👤 User ID from headers:", userId);
+    console.log("📱 Telegram Chat ID from headers:", chatId);
+
+    let finalUserId: string;
+
+    if (userId) {
+      // Web user - use userId from JWT
+      finalUserId = userId;
+      console.log("🌐 Processing as web user:", finalUserId);
+    } else if (chatId) {
+      // Telegram user - get userId from chatId
+      console.log("📱 Processing as Telegram user, looking up userId...");
+
+      try {
+        const foundUserId = await KlapModel.getUserIdFromChatId(
+          parseInt(chatId)
+        );
+
+        if (!foundUserId) {
+          console.error("❌ Telegram account not linked:", chatId);
+          return NextResponse.json(
+            {
+              error:
+                "Telegram account not linked. Please send your email to the bot first.",
+            },
+            { status: 401 }
+          );
+        }
+
+        finalUserId = foundUserId; // Now TypeScript knows it's not null
+        console.log(
+          "✅ Found linked user:",
+          finalUserId,
+          "for chatId:",
+          chatId
+        );
+      } catch (error) {
+        console.error("❌ Error looking up userId from chatId:", error);
+        return NextResponse.json(
+          { error: "Error validating Telegram account" },
+          { status: 500 }
+        );
+      }
+    } else {
+      // No authentication provided
+      console.error("❌ No userId or chatId provided");
       return NextResponse.json(
-        { error: "Unauthorized - User ID not found" },
+        { error: "Unauthorized - No authentication provided" },
         { status: 401 }
       );
     }
 
     // Check user token balance
-    const tokenCount = await KlapModel.getUserTokenCount(userId);
+    const tokenCount = await KlapModel.getUserTokenCount(finalUserId);
     console.log("🪙 User token count:", tokenCount);
 
     if (tokenCount <= 0) {
@@ -49,7 +94,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is already processing a video
-    const canProcess = await KlapModel.setUserProcessingStatus(userId, true);
+    const canProcess = await KlapModel.setUserProcessingStatus(
+      finalUserId,
+      true
+    );
     if (!canProcess) {
       return NextResponse.json(
         {
@@ -65,16 +113,16 @@ export async function POST(request: NextRequest) {
     // Create a ReadableStream for Server-Sent Events
     const stream = new ReadableStream({
       async start(controller) {
-        console.log("📡 Stream started");
+        console.log("📡 Stream started for user:", finalUserId);
         const encoder = new TextEncoder();
         let isProcessingFlagCleared = false;
 
         // Helper function to clear processing flag
         const clearProcessingFlag = async () => {
           if (!isProcessingFlagCleared) {
-            await KlapModel.setUserProcessingStatus(userId, false);
+            await KlapModel.setUserProcessingStatus(finalUserId, false);
             isProcessingFlagCleared = true;
-            console.log("🔓 Processing flag cleared");
+            console.log("🔓 Processing flag cleared for user:", finalUserId);
           }
         };
 
@@ -85,8 +133,12 @@ export async function POST(request: NextRequest) {
             const message = `data: ${JSON.stringify({
               ...data,
               timestamp,
+              user_type: userId ? "web" : "telegram", // Add user type for debugging
             })}\n\n`;
-            console.log(`📤 [${timestamp}] Sending update:`, data);
+            console.log(
+              `📤 [${timestamp}] Sending update to ${finalUserId}:`,
+              data
+            );
 
             controller.enqueue(encoder.encode(message));
 
@@ -111,7 +163,7 @@ export async function POST(request: NextRequest) {
           });
 
           // Deduct token
-          const tokenDeducted = await KlapModel.deductUserToken(userId);
+          const tokenDeducted = await KlapModel.deductUserToken(finalUserId);
           if (!tokenDeducted) {
             await sendUpdate({
               status: "error",
@@ -122,7 +174,7 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          console.log("🪙 Token deducted successfully");
+          console.log("🪙 Token deducted successfully for user:", finalUserId);
           await sendUpdate({
             status: "token_deducted",
             message: "Token deducted. Processing video...",
@@ -131,14 +183,16 @@ export async function POST(request: NextRequest) {
           });
 
           // Get user's language preference
-          console.log("🔍 Fetching user preferences for userId:", userId);
+          console.log("🔍 Fetching user preferences for userId:", finalUserId);
           await sendUpdate({
             status: "fetching_preferences",
             message: "Fetching user preferences...",
             progress: 5,
           });
 
-          const language = await KlapModel.getUserLanguagePreference(userId);
+          const language = await KlapModel.getUserLanguagePreference(
+            finalUserId
+          );
           console.log("🌐 Language set to:", language);
 
           await sendUpdate({
@@ -209,10 +263,29 @@ export async function POST(request: NextRequest) {
 
           if (!taskResponse.ok) {
             console.error("❌ Task creation failed:", taskData);
+
+            // Handle specific error cases
+            let errorMessage = "Task creation failed";
+            if (taskData.error_code === "video_too_long") {
+              errorMessage =
+                "Video is too long for processing. Please use a shorter video (recommended: under 10 minutes).";
+            } else if (taskData.error_code === "invalid_url") {
+              errorMessage =
+                "Invalid video URL. Please make sure the YouTube video is public and accessible.";
+            } else if (taskData.error_code === "unsupported_platform") {
+              errorMessage = "Only YouTube videos are supported currently.";
+            } else if (
+              taskData.message &&
+              taskData.message !== "unprocessable-entity"
+            ) {
+              errorMessage = taskData.message;
+            }
+
             await sendUpdate({
               status: "error",
-              message: "Task creation failed",
-              error: taskData.message || JSON.stringify(taskData),
+              message: errorMessage,
+              error_code: taskData.error_code || "unknown",
+              error_details: taskData.message || JSON.stringify(taskData),
             });
             await clearProcessingFlag();
             controller.close();
@@ -360,41 +433,161 @@ export async function POST(request: NextRequest) {
             project_id: output_id,
           });
 
-          const projectRes = await fetch(
-            `https://api.klap.app/v2/projects/${output_id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${KLAP_API_KEY}`,
-              },
+          // Sometimes shorts generation takes extra time, let's retry a few times
+          let shorts: any[] = [];
+          let rawResponse: any = null;
+          const maxFetchRetries = 5; // Increase retries
+
+          for (
+            let fetchAttempt = 0;
+            fetchAttempt < maxFetchRetries;
+            fetchAttempt++
+          ) {
+            console.log(
+              `🔄 Fetch attempt ${fetchAttempt + 1}/${maxFetchRetries}`
+            );
+
+            const projectRes = await fetch(
+              `https://api.klap.app/v2/projects/${output_id}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${KLAP_API_KEY}`,
+                },
+              }
+            );
+
+            console.log("📽️ Project response status:", projectRes.status);
+            console.log(
+              "📽️ Project response headers:",
+              Object.fromEntries(projectRes.headers.entries())
+            );
+
+            if (!projectRes.ok) {
+              const errorText = await projectRes.text();
+              console.error("❌ Failed to fetch shorts:", errorText);
+
+              if (fetchAttempt === maxFetchRetries - 1) {
+                // Last attempt failed
+                await sendUpdate({
+                  status: "error",
+                  message: "Failed to fetch shorts after task completion",
+                  error: errorText,
+                });
+                await clearProcessingFlag();
+                controller.close();
+                return;
+              }
+
+              // Wait before retry
+              await delay(15000);
+              continue;
             }
-          );
 
-          console.log("📽️ Project response status:", projectRes.status);
+            // The API returns an array directly!
+            const fetchedShorts = await projectRes.json();
+            rawResponse = fetchedShorts; // Store raw response for debugging
 
-          if (!projectRes.ok) {
-            const errorText = await projectRes.text();
-            console.error("❌ Failed to fetch shorts:", errorText);
-            await sendUpdate({
-              status: "error",
-              message: "Failed to fetch shorts after task completion",
-              error: errorText,
-            });
-            await clearProcessingFlag();
-            controller.close();
-            return;
+            console.log("🎬 Raw response type:", typeof fetchedShorts);
+            console.log(
+              "🎬 Raw response is array:",
+              Array.isArray(fetchedShorts)
+            );
+            console.log(
+              "🎬 Raw response length:",
+              Array.isArray(fetchedShorts) ? fetchedShorts.length : "N/A"
+            );
+            console.log(
+              "📋 Complete raw response:",
+              JSON.stringify(fetchedShorts, null, 2)
+            );
+
+            // Check if it's an object with shorts array inside
+            if (fetchedShorts && typeof fetchedShorts === "object") {
+              // Maybe it's wrapped in an object?
+              if (fetchedShorts.shorts && Array.isArray(fetchedShorts.shorts)) {
+                console.log("🔍 Found shorts in .shorts property");
+                shorts = fetchedShorts.shorts;
+                break;
+              }
+              // Maybe it's in data property?
+              else if (
+                fetchedShorts.data &&
+                Array.isArray(fetchedShorts.data)
+              ) {
+                console.log("🔍 Found shorts in .data property");
+                shorts = fetchedShorts.data;
+                break;
+              }
+              // Maybe it's in results property?
+              else if (
+                fetchedShorts.results &&
+                Array.isArray(fetchedShorts.results)
+              ) {
+                console.log("🔍 Found shorts in .results property");
+                shorts = fetchedShorts.results;
+                break;
+              }
+              // Maybe it's in items property?
+              else if (
+                fetchedShorts.items &&
+                Array.isArray(fetchedShorts.items)
+              ) {
+                console.log("🔍 Found shorts in .items property");
+                shorts = fetchedShorts.items;
+                break;
+              }
+            }
+
+            if (Array.isArray(fetchedShorts) && fetchedShorts.length > 0) {
+              console.log("🔍 Response is direct array with items");
+              shorts = fetchedShorts;
+              break; // Success, exit retry loop
+            }
+
+            if (fetchAttempt < maxFetchRetries - 1) {
+              const waitTime = 20000 + fetchAttempt * 10000; // Increase wait time each retry
+              console.log(
+                `⏳ No shorts yet, waiting ${waitTime}ms before retry...`
+              );
+              await sendUpdate({
+                status: "waiting_for_shorts",
+                message: `Waiting for shorts generation... (attempt ${
+                  fetchAttempt + 1
+                }/${maxFetchRetries})`,
+                progress: 82 + fetchAttempt,
+                project_id: output_id,
+                wait_time: waitTime,
+              });
+              await delay(waitTime);
+            }
           }
 
-          // The API returns an array directly!
-          const shorts = await projectRes.json();
-          console.log("🎬 Shorts received:", shorts.length, "shorts");
-
           if (!Array.isArray(shorts) || shorts.length === 0) {
-            console.error("❌ No shorts in response");
+            console.error("❌ No shorts generated after all retries");
+            console.log(
+              "📋 Final raw response:",
+              JSON.stringify(rawResponse, null, 2)
+            );
+
             await sendUpdate({
               status: "error",
-              message: "No shorts were generated",
+              message:
+                "Unable to retrieve generated shorts. The video was processed successfully but we couldn't fetch the results.",
+              error_code: "fetch_shorts_failed",
               progress: 85,
               project_id: output_id,
+              debug_info: {
+                response_type: typeof rawResponse,
+                response_keys:
+                  rawResponse && typeof rawResponse === "object"
+                    ? Object.keys(rawResponse)
+                    : null,
+                is_array: Array.isArray(rawResponse),
+                response_sample: rawResponse,
+              },
+              suggestion:
+                "Please check your Klap dashboard at https://app.klap.app - your shorts may be available there. Contact support with this project ID: " +
+                output_id,
             });
             await clearProcessingFlag();
             controller.close();
@@ -536,7 +729,7 @@ export async function POST(request: NextRequest) {
             console.log("💾 Download URL:", downloadUrl);
 
             if (downloadUrl) {
-              console.log("💾 Saving to database...");
+              console.log("💾 Saving to database for user:", finalUserId);
               await sendUpdate({
                 status: "saving_to_database",
                 message: "Saving short to database...",
@@ -552,14 +745,17 @@ export async function POST(request: NextRequest) {
                   instagram: bestShort.publication_captions?.instagram || "",
                 };
 
-                await KlapModel.addUserShort(userId, {
+                await KlapModel.addUserShort(finalUserId, {
                   title: bestShort.name,
                   virality_score: bestShort.virality_score,
                   captions: formattedCaptions,
                   download_url: downloadUrl,
                 });
 
-                console.log("✅ Database save successful");
+                console.log(
+                  "✅ Database save successful for user:",
+                  finalUserId
+                );
                 await sendUpdate({
                   status: "database_saved",
                   message: "Successfully saved to database!",
@@ -640,7 +836,8 @@ export async function POST(request: NextRequest) {
         "X-Accel-Buffering": "no", // Disable nginx buffering
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, x-userId",
+        "Access-Control-Allow-Headers":
+          "Content-Type, x-userId, x-telegram-chat-id",
       },
     });
   } catch (error) {

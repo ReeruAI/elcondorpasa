@@ -1,6 +1,24 @@
 import { LucideIcon } from "lucide-react";
 import { ObjectId } from "mongodb";
 
+//! Telegram Integration Types
+export interface TelegramOTP {
+  code: string;
+  generatedAt: Date;
+  expiresAt: Date;
+  isUsed: boolean;
+}
+
+export interface PendingTelegramVerification {
+  email: string;
+  chatId: number;
+  telegramName: string;
+  telegramUsername?: string;
+  initiatedAt: Date;
+  expiresAt: Date;
+}
+
+//! User Types
 export type NewUserType = {
   _id?: ObjectId;
   username: string;
@@ -9,8 +27,10 @@ export type NewUserType = {
   password: string;
   phone: string;
   telegram: boolean;
-  telegramChatId?: number; // Chat ID dari Telegram
-  telegramUsername?: string; // Username Telegram (optional)
+  telegramChatId?: number;
+  telegramUsername?: string;
+  telegramOTP?: TelegramOTP;
+  pendingTelegramVerification?: PendingTelegramVerification;
   reeruToken: number;
 };
 
@@ -28,6 +48,10 @@ export interface UserModel {
   password: string;
   phone: string;
   telegram: boolean;
+  telegramChatId?: number;
+  telegramUsername?: string;
+  telegramOTP?: TelegramOTP;
+  pendingTelegramVerification?: PendingTelegramVerification;
   reeruToken: number;
 }
 
@@ -80,7 +104,7 @@ export interface Stat {
   text: string;
 }
 
-//! Login and Signup Types
+//! Authentication Types
 export interface GoogleResponse {
   credential: string;
 }
@@ -93,7 +117,6 @@ export interface LoginResponse {
   };
 }
 
-//! Register Types
 export interface AuthResponse {
   message?: string;
   user?: {
@@ -111,7 +134,7 @@ export interface FormField {
   icon: LucideIcon;
 }
 
-//! Dashboard specific types
+//! Dashboard Types
 export interface TrendingVideo {
   id: string;
   title: string;
@@ -200,7 +223,7 @@ export interface VideoResult {
   download_url: string;
 }
 
-//! Types for YouTube integration
+//! YouTube Integration Types
 export interface YouTubeData {
   accessToken: string;
   refreshToken: string;
@@ -216,4 +239,24 @@ export interface YouTubeUpload {
   videoId: string;
   title: string;
   uploadedAt: Date;
+}
+
+//! Telegram API Response Types
+export interface TelegramApiResponse {
+  success: boolean;
+  message: string;
+  user?: {
+    name: string;
+    email: string;
+    telegramUsername?: string;
+  };
+  errorCode?: string;
+}
+
+export interface OTPStatusData {
+  isConnected: boolean;
+  telegramUsername?: string;
+  hasActiveOTP: boolean;
+  otpCode?: string;
+  otpExpiresAt?: Date;
 }
