@@ -217,3 +217,32 @@ export interface YouTubeUpload {
   title: string;
   uploadedAt: Date;
 }
+
+//! Types for your-clip
+export interface VideoShort {
+  title: string;
+  download_url: string;
+  created_at: string;
+  virality_score?: number;
+  captions?: {
+    tiktok: string;
+    youtube: string;
+    linkedin: string;
+    instagram: string;
+  };
+}
+
+export interface UserShortsResponse {
+  _id: string;
+  userid: string;
+  createdAt: string;
+  shorts: VideoShort[];
+  updatedAt: string;
+}
+
+export interface PlatformConfig {
+  icon: string;
+  color: string;
+}
+
+export type PlatformType = "tiktok" | "youtube" | "linkedin" | "instagram";

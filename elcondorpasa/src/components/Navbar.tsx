@@ -270,7 +270,7 @@ export default function Navbar() {
           />
         </motion.div>
       </div>
-      <span className="text-gray-300 font-medium">
+      <span className="text-gray-200 font-medium">
         {isLoadingTokens ? "..." : userTokens.toLocaleString()}
       </span>
     </motion.div>
@@ -286,8 +286,14 @@ export default function Navbar() {
         duration: 0.3,
         ease: "easeInOut",
       }}
-      className="fixed w-full backdrop-blur-md z-50"
-      style={{ backgroundColor: "rgba(29,29,29,0.95)" }}
+      className="fixed w-full z-50"
+      style={{
+        backgroundColor: "rgba(29, 29, 29, 0.1)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+        boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
+      }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20 md:h-24">
@@ -318,7 +324,7 @@ export default function Navbar() {
                 key={link.href}
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
-                className="px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:border-b-2 hover:border-[#D68CB8] transition-all duration-200"
+                className="px-4 py-2 text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
               >
                 {link.label}
               </a>
@@ -346,11 +352,17 @@ export default function Navbar() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-gray-900 border border-gray-700"
+                        className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg"
+                        style={{
+                          backgroundColor: "rgba(31, 31, 31, 0.7)",
+                          backdropFilter: "blur(20px)",
+                          WebkitBackdropFilter: "blur(20px)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                        }}
                       >
                         <button
                           onClick={handleLogout}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors rounded-lg"
+                          className="flex items-center w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors rounded-lg"
                         >
                           <LogOut className="w-4 h-4 mr-3" />
                           Logout
@@ -374,7 +386,7 @@ export default function Navbar() {
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-md text-gray-300 hover:text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-gray-500"
+              className="p-2 rounded-md text-gray-200 hover:text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/20"
               aria-label="Toggle menu"
             >
               {isMobileMenuOpen ? (
@@ -399,20 +411,25 @@ export default function Navbar() {
           >
             <div
               className="px-2 pt-2 pb-3 space-y-1 shadow-lg"
-              style={{ backgroundColor: "rgb(29,29,29)" }}
+              style={{
+                backgroundColor: "rgba(29, 29, 29, 0.1)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
             >
               {navLinks.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
                   onClick={(e) => handleNavClick(e, link.href)}
-                  className="block px-3 py-3 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors duration-200"
+                  className="block px-3 py-3 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 transition-all duration-200"
                 >
                   {link.label}
                 </a>
               ))}
 
-              <div className="pt-2 border-t border-gray-700">
+              <div className="pt-2 border-t border-white/10">
                 {isLoggedIn ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between px-3 py-2">
@@ -425,7 +442,7 @@ export default function Navbar() {
                     </div>
                     <button
                       onClick={handleLogout}
-                      className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
+                      className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
                     >
                       <LogOut className="w-4 h-4 mr-3" />
                       Logout

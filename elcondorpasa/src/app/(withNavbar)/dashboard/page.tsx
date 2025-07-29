@@ -511,7 +511,7 @@ export default function Dashboard() {
         videoData={videoResult}
       />
 
-      <div className="min-h-screen bg-[#1D1D1D] text-white">
+      <div className="min-h-screen bg-gradient-to-b from-[#1D1D1D] to-black text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div
