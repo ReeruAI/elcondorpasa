@@ -85,7 +85,7 @@ export default function Dashboard() {
   ) as React.RefObject<HTMLDivElement>;
 
   // Fetch history videos with simulated streaming
-  const fetchHistoryVideos = async () => {
+  const fetchHistoryVideos = useCallback(async () => {
     try {
       setIsLoadingHistory(true);
       setHistoryVideos([]);
@@ -97,11 +97,23 @@ export default function Dashboard() {
 
       if (response.data?.data?.[0]?.videos) {
         const videos = response.data.data[0].videos;
+        const uniqueVideos = new Map();
 
+        // Ensure unique videos by using a Map
         for (let i = 0; i < videos.length; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
           const video = convertToTrendingVideo(videos[i]);
-          setHistoryVideos((prev) => [...prev, video]);
+          // Use video URL or ID as the key to ensure uniqueness
+          const key = video.url || video.id || `video-${i}`;
+          if (!uniqueVideos.has(key)) {
+            uniqueVideos.set(key, video);
+          }
+        }
+
+        // Convert Map back to array and stream them
+        const uniqueVideoArray = Array.from(uniqueVideos.values());
+        for (let i = 0; i < uniqueVideoArray.length; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          setHistoryVideos((prev) => [...prev, uniqueVideoArray[i]]);
           setHistoryStreamIndex(i + 1);
         }
       }
@@ -110,7 +122,7 @@ export default function Dashboard() {
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, []); // Remove dependencies to prevent re-creation
 
   // Process streaming response
   const processStreamingResponse = useCallback(
@@ -248,19 +260,24 @@ export default function Dashboard() {
 
   // Check user preferences and load trending videos
   useEffect(() => {
+    let mounted = true; // Add mounted flag to prevent state updates on unmounted component
+
     // Check for existing processing state
     const savedState = getProcessingState();
     if (savedState && savedState.isProcessing) {
       setProcessingState(savedState);
     }
 
-    const checkPreferencesAndLoadVideos = async () => {
+    const initializeDashboard = async () => {
       try {
         setLoadingPreferences(true);
 
+        // Check preferences
         const preferencesResponse = await axios.get("/api/preferences", {
           withCredentials: true,
         });
+
+        if (!mounted) return; // Check if component is still mounted
 
         const userHasPreferences =
           preferencesResponse.data?.hasPreference === true;
@@ -273,23 +290,36 @@ export default function Dashboard() {
 
           if (contentPreference && languagePreference) {
             setLoadingPreferences(false);
-            await loadRecommendations({
+            // Load recommendations (without await to not block history)
+            loadRecommendations({
               contentPreference,
               languagePreference,
             });
-            return;
           }
         }
       } catch (error) {
         console.error("Error checking preferences:", error);
-        setHasPreferences(false);
+        if (mounted) {
+          setHasPreferences(false);
+        }
       } finally {
-        setLoadingPreferences(false);
+        if (mounted) {
+          setLoadingPreferences(false);
+        }
+      }
+
+      // Fetch history videos separately (not dependent on preferences)
+      if (mounted) {
+        fetchHistoryVideos();
       }
     };
 
-    checkPreferencesAndLoadVideos();
-    fetchHistoryVideos();
+    initializeDashboard();
+
+    // Cleanup function
+    return () => {
+      mounted = false;
+    };
   }, []); // Empty dependency array - only run once on mount
 
   const handleSubmitUrl = async (e: React.FormEvent) => {
@@ -499,7 +529,6 @@ export default function Dashboard() {
       return;
 
     await loadRecommendations(userPreferences, true);
-    await fetchHistoryVideos();
   };
 
   const handleVideoClick = (video: TrendingVideo) => {

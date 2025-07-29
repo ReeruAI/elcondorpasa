@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
 import { Fira_Code, Fira_Mono } from "next/font/google";
 import "./globals.css";
+import { StrictMode } from "react";
 
 const firaCode = Fira_Code({
   variable: "--font-fira-code",
   subsets: ["latin"],
+  display: "swap", // Add this
 });
 
 const firaMono = Fira_Mono({
   variable: "--font-fira-mono",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
+  display: "swap", // Add this
 });
 
 export const metadata: Metadata = {
@@ -26,7 +29,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${firaCode.variable} ${firaMono.variable} antialiased`}>
-        <main className="">{children}</main>
+        <StrictMode>
+          <main className="">{children}</main>
+        </StrictMode>
       </body>
     </html>
   );
