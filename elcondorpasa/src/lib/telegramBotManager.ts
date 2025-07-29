@@ -81,6 +81,80 @@ class TelegramBotManager {
   }
 
   private setupHandlers(bot: any) {
+    // Handle callback queries (button clicks)
+    bot.on("callback_query", async (query: any) => {
+      const chatId = query.message.chat.id;
+      const data = query.data;
+      const messageId = query.message.message_id;
+      const userId = query.from.id;
+      const userName = query.from.first_name;
+
+      console.log(`🔘 Callback query from ${userName} (${userId}): ${data}`);
+
+      // Handle /generateVideo callback
+      if (data.startsWith("/generateVideo ")) {
+        const videoUrl = data.replace("/generateVideo ", "");
+
+        try {
+          // Answer callback query immediately to remove loading state
+          await bot.answerCallbackQuery(query.id, {
+            text: "🎬 Processing your video...",
+            show_alert: false,
+          });
+
+          // Send processing message
+          await bot.sendMessage(
+            chatId,
+            `🎬 *Generating Short/Reel*\n\n` +
+              `Processing video:\n${videoUrl}\n\n` +
+              `⏳ This may take a moment. We'll notify you when it's ready!`,
+            {
+              parse_mode: "Markdown",
+              reply_to_message_id: messageId,
+            }
+          );
+
+          // TODO: Add actual video processing logic here
+          // For now, we'll just simulate the process
+          console.log(`📹 Processing video: ${videoUrl} for user ${userId}`);
+
+          // You can call your API endpoint here to process the video
+          // Example:
+          // const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
+          // const result = await axios.post(`${API_URL}/api/video/generate`, {
+          //   videoUrl,
+          //   userId,
+          //   chatId
+          // });
+
+          // For testing, send a success message after 2 seconds
+          setTimeout(async () => {
+            await bot.sendMessage(
+              chatId,
+              `✅ *Video Ready!*\n\n` +
+                `Your Short/Reel has been generated successfully!\n\n` +
+                `🎬 Original: ${videoUrl}\n` +
+                `📱 View your Short/Reel in the ReeruAI dashboard`,
+              { parse_mode: "Markdown" }
+            );
+          }, 2000);
+        } catch (error: any) {
+          console.error("❌ Error handling callback query:", error);
+
+          await bot.answerCallbackQuery(query.id, {
+            text: "❌ Error processing request",
+            show_alert: true,
+          });
+
+          await bot.sendMessage(
+            chatId,
+            `❌ *Error*\n\nFailed to process your video. Please try again later.`,
+            { parse_mode: "Markdown" }
+          );
+        }
+      }
+    });
+
     // Handle incoming messages
     bot.on("message", async (msg: any) => {
       const chatId = msg.chat.id;
