@@ -15,6 +15,7 @@ import { StreamingProgress } from "@/components/dashboard/StreamingProgress";
 import { UrlInputSection } from "@/components/dashboard/UrlInputSection";
 import { VideoCarousel } from "@/components/dashboard/VideoCarousel";
 import { EmptyState } from "@/components/dashboard/EmptyState";
+import ParticleBackground from "@/components/yourclip/ParticleBackground";
 
 // Types
 import {
@@ -511,17 +512,30 @@ export default function Dashboard() {
         videoData={videoResult}
       />
 
-      <div className="min-h-screen bg-gradient-to-b from-[#1D1D1D] to-black text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-gradient-to-b from-[#1D1D1D] to-black text-white relative">
+        <ParticleBackground />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
           {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-12"
-          >
-            <h1 className="text-3xl sm:text-4xl font-bold mb-2">Dashboard</h1>
-            <p className="text-gray-400">Create viral shorts in seconds</p>
-          </motion.div>
+          <div className="relative overflow-hidden lg:pt-8">
+            <div className="absolute inset-0" />
+            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-8">
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center"
+              >
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4">
+                  Dash
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-300 to-pink-400">
+                    board
+                  </span>
+                </h1>
+                <p className="text-gray-400 text-lg">
+                  Create viral shorts in seconds
+                </p>
+              </motion.div>
+            </div>
+          </div>
 
           {/* URL Input Section */}
           <UrlInputSection
@@ -591,13 +605,6 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <History className="w-6 h-6 text-[#D68CB8]" />
-                <h2 className="text-xl sm:text-2xl font-semibold">History</h2>
-              </div>
-            </div>
-
             {isLoadingHistory && historyVideos.length === 0 ? (
               <div className="flex justify-center items-center h-64">
                 <div className="text-center">

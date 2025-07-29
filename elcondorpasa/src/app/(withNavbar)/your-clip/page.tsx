@@ -10,6 +10,7 @@ import VideoModal from "../../../components/yourclip/VideoModal";
 import LoadingState from "../../../components/yourclip/LoadingState";
 import EmptyState from "../../../components/yourclip/EmptyState";
 import ParticleBackground from "@/components/yourclip/ParticleBackground";
+import CursorGlow from "@/components/CursorGlow";
 
 export default function YourClipsPage() {
   const { shorts, isLoading } = useUserShorts();
@@ -38,24 +39,32 @@ export default function YourClipsPage() {
 
   return (
     <>
-      <ParticleBackground />
       <VideoModal
         isOpen={showModal}
         onClose={handleCloseModal}
         video={selectedVideo}
       />
 
-      <div className="min-h-screen bg-gradient-to-b from-[#1D1D1D] to-black">
-        <PageHeader />
+      <div className="min-h-screen relative">
+        {/* Particle Background */}
+        <ParticleBackground />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-          {isLoading ? (
-            <LoadingState />
-          ) : shorts.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <VideoGrid videos={shorts} onVideoClick={handleVideoClick} />
-          )}
+        {/* Cursor Glow Effect */}
+        <CursorGlow />
+
+        {/* Main Content */}
+        <div className="relative z-10">
+          <PageHeader />
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+            {isLoading ? (
+              <LoadingState />
+            ) : shorts.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <VideoGrid videos={shorts} onVideoClick={handleVideoClick} />
+            )}
+          </div>
         </div>
       </div>
     </>

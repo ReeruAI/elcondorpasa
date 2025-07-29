@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useTokens } from "@/components/Navbar"; // Import the token hook
 import ParticleBackground from "@/components/yourclip/ParticleBackground";
+import CursorGlow from "@/components/CursorGlow"; // Import CursorGlow
 
 // Declare Midtrans Snap global
 declare global {
@@ -404,7 +405,7 @@ export default function TopUpPage() {
         setIsLoading(false);
       }
     },
-    [isSnapLoaded]
+    [isSnapLoaded, addTokens]
   );
 
   const checkTransactionStatus = async (orderId: string, pkg: Package) => {
@@ -447,84 +448,98 @@ export default function TopUpPage() {
 
   return (
     <>
-      <div className="min-h-screen flex items-center justify-center bg-[#1D1D1D] pt-12 px-4 sm:px-6 lg:px-8 lg:pt-0 relative overflow-hidden">
+      <div className="min-h-screen relative bg-[#1D1D1D] overflow-hidden">
+        {/* Background Effects */}
         <ParticleBackground />
-        <div className="max-w-6xl w-full relative z-10">
-          <FadeInView className="text-center mb-12">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="inline-flex items-center justify-center w-16 h-16 bg-[#D68CB8]/20 rounded-full mb-4"
-            >
-              <Sparkles className="w-8 h-8 text-[#D68CB8]" />
-            </motion.div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-              Choose Your Package
-            </h1>
-            <p className="text-gray-400 max-w-2xl mx-auto">
-              Select the perfect package for your needs. All packages include
-              instant activation and 24/7 support.
-            </p>
-          </FadeInView>
 
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="max-w-md mx-auto mb-8 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl backdrop-blur-sm flex items-center gap-2"
-            >
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {error}
-            </motion.div>
-          )}
+        {/* Cursor Glow Effect */}
+        <CursorGlow />
 
-          {!isSnapLoaded && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="max-w-md mx-auto mb-8 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-4 py-3 rounded-xl backdrop-blur-sm flex items-center gap-2"
-            >
-              <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-              Loading payment system...
-            </motion.div>
-          )}
+        {/* Main Content */}
+        <div className="relative z-10 flex items-center justify-center pt-12 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-6xl w-full">
+            <FadeInView className="text-center mb-12">
+              <div className="relative overflow-hidden lg:pt-16">
+                <div className="absolute inset-0" />
+                <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-8">
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center"
+                  >
+                    <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4">
+                      Choose Your{" "}
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-300 to-pink-400">
+                        Package
+                      </span>
+                    </h1>
+                    <p className="text-gray-400 text-lg">
+                      Select the perfect package for your needs. All packages
+                      include instant activation and 24/7 support.
+                    </p>
+                  </motion.div>
+                </div>
+              </div>
+            </FadeInView>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-            {packages.map((pkg, index) => (
-              <PackageCard
-                key={pkg.id}
-                pkg={pkg}
-                onSelect={handlePackageSelect}
-                isLoading={isLoading}
-                delay={0.1 * (index + 1)}
-              />
-            ))}
-          </div>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-md mx-auto mb-8 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl backdrop-blur-sm flex items-center gap-2"
+              >
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {error}
+              </motion.div>
+            )}
 
-          {/* Development info */}
-          {process.env.NODE_ENV === "development" && (
-            <FadeInView delay={0.7} className="mt-8">
+            {!isSnapLoaded && (
               <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 0.5 }}
-                className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl backdrop-blur-sm max-w-2xl mx-auto"
+                animate={{ opacity: 1 }}
+                className="max-w-md mx-auto mb-8 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-4 py-3 rounded-xl backdrop-blur-sm flex items-center gap-2"
               >
-                <h3 className="text-sm font-medium text-blue-400 mb-2">
-                  Development Mode - Midtrans Snap
-                </h3>
-                <p className="text-xs text-blue-300/70">
-                  Using Sandbox environment. Requires
-                  NEXT_PUBLIC_MIDTRANS_CLIENT_KEY in .env.local
-                </p>
-                {!process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY && (
-                  <p className="text-xs text-red-400 mt-1">
-                    ⚠️ Midtrans Client Key not found
-                  </p>
-                )}
+                <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+                Loading payment system...
               </motion.div>
-            </FadeInView>
-          )}
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+              {packages.map((pkg, index) => (
+                <PackageCard
+                  key={pkg.id}
+                  pkg={pkg}
+                  onSelect={handlePackageSelect}
+                  isLoading={isLoading}
+                  delay={0.1 * (index + 1)}
+                />
+              ))}
+            </div>
+
+            {/* Development info */}
+            {process.env.NODE_ENV === "development" && (
+              <FadeInView delay={0.7} className="mt-8">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.5 }}
+                  className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl backdrop-blur-sm max-w-2xl mx-auto"
+                >
+                  <h3 className="text-sm font-medium text-blue-400 mb-2">
+                    Development Mode - Midtrans Snap
+                  </h3>
+                  <p className="text-xs text-blue-300/70">
+                    Using Sandbox environment. Requires
+                    NEXT_PUBLIC_MIDTRANS_CLIENT_KEY in .env.local
+                  </p>
+                  {!process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY && (
+                    <p className="text-xs text-red-400 mt-1">
+                      ⚠️ Midtrans Client Key not found
+                    </p>
+                  )}
+                </motion.div>
+              </FadeInView>
+            )}
+          </div>
         </div>
 
         <SuccessModal

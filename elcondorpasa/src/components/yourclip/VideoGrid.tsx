@@ -13,7 +13,7 @@ interface VideoGridProps {
 const VideoGrid: React.FC<VideoGridProps> = ({ videos, onVideoClick }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftButton, setShowLeftButton] = useState(false);
-  const [showRightButton, setShowRightButton] = useState(true);
+  const [showRightButton, setShowRightButton] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [activeIndicator, setActiveIndicator] = useState(0);
   const [cardsPerView, setCardsPerView] = useState(2);
@@ -49,8 +49,13 @@ const VideoGrid: React.FC<VideoGridProps> = ({ videos, onVideoClick }) => {
     if (!scrollContainerRef.current) return;
 
     const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-    setShowLeftButton(scrollLeft > 10);
-    setShowRightButton(scrollLeft < scrollWidth - clientWidth - 10);
+
+    // Only show left button if we've scrolled more than 10px from start
+    setShowLeftButton(scrollLeft > 100);
+
+    // Only show right button if there's more content to scroll
+    const hasMoreContent = scrollLeft < scrollWidth - clientWidth - 10;
+    setShowRightButton(hasMoreContent && scrollWidth > clientWidth);
 
     // Calculate active indicator based on scroll position
     const cardWidth = clientWidth / cardsPerView;
@@ -58,15 +63,34 @@ const VideoGrid: React.FC<VideoGridProps> = ({ videos, onVideoClick }) => {
     setActiveIndicator(currentPage);
   };
 
+  // Initialize scroll position
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = 0;
+    }
+  }, [videos]);
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    container.addEventListener("scroll", checkScrollPosition);
-    checkScrollPosition();
+    // Small delay to ensure DOM is fully rendered
+    const initialCheck = setTimeout(() => {
+      checkScrollPosition();
+    }, 100);
 
-    return () => container.removeEventListener("scroll", checkScrollPosition);
-  }, [cardsPerView]);
+    container.addEventListener("scroll", checkScrollPosition);
+
+    // Also check when window resizes
+    const handleResize = () => checkScrollPosition();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      clearTimeout(initialCheck);
+      container.removeEventListener("scroll", checkScrollPosition);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [cardsPerView, videos.length]);
 
   const scroll = (direction: "left" | "right") => {
     if (!scrollContainerRef.current) return;
@@ -164,7 +188,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({ videos, onVideoClick }) => {
         <div className="w-full py-8">
           <div
             ref={scrollContainerRef}
-            className={`flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth px-8 pt-2 ${
+            className={`flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth px-8 ${
               !isMobile ? "cursor-grab" : ""
             }`}
             style={{
