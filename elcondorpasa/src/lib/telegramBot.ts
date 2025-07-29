@@ -13,13 +13,22 @@ console.log("🤖 Telegram Bot started successfully");
 console.log("🔧 Initializing CronService in telegramBot.ts");
 const cronService = CronService.getInstance();
 
+// Store user states (in production, use Redis or database)
+const userStates = new Map<
+  number,
+  {
+    step: "waiting_email" | "waiting_otp";
+    email?: string;
+    expiresAt?: Date;
+  }
+>();
+
 // Helper function to process video with Klap API
 const processVideoWithKlap = async (
   videoUrl: string,
   chatId: number,
   userId: number
 ) => {
-  // Update the API_URL to point to the correct endpoint
   const API_URL = `${
     process.env.API_BASE_URL || "http://localhost:3000"
   }/api/klap`;
@@ -27,11 +36,11 @@ const processVideoWithKlap = async (
   let lastProgress = 0;
 
   try {
-    // Update the fetch call to use the new API_URL
     const response = await fetch(API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-telegram-chat-id": chatId.toString(),
       },
       body: JSON.stringify({ video_url: videoUrl }),
     });
@@ -55,7 +64,6 @@ const processVideoWithKlap = async (
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
 
-      // Keep the last incomplete line in the buffer
       buffer = lines.pop() || "";
 
       for (const line of lines) {
@@ -67,7 +75,6 @@ const processVideoWithKlap = async (
             const data = JSON.parse(jsonStr);
             console.log("📊 Klap API Update:", data.status, data.message);
 
-            // Update progress message based on status
             if (data.progress !== undefined && data.progress !== lastProgress) {
               const progressBar =
                 "█".repeat(Math.floor(data.progress / 10)) +
@@ -85,6 +92,11 @@ const processVideoWithKlap = async (
                 `📊 Status: ${data.message}\n` +
                 `📈 Progress: [${progressBar}] ${data.progress}%\n\n` +
                 `${data.task_id ? `🆔 Task ID: ${data.task_id}\n` : ""}` +
+                `${
+                  data.tokens_remaining !== undefined
+                    ? `🪙 Tokens remaining: ${data.tokens_remaining}\n`
+                    : ""
+                }` +
                 `⏱️ Please wait...`;
 
               if (messageId) {
@@ -111,18 +123,22 @@ const processVideoWithKlap = async (
               lastProgress = data.progress;
             }
 
-            // Handle completion
             if (data.status === "completed" && data.short) {
               const short = data.short;
               const completionMessage =
                 `✅ *Video Ready!*\n\n` +
                 `🎬 *Title:* ${short.title}\n` +
                 `🎯 *Virality Score:* ${short.virality_score}/100\n` +
-                `⏱️ *Duration:* ${Math.round(short.duration)}s\n\n` +
                 `💡 *Analysis:*\n_${short.description}_\n\n` +
                 `📝 *Caption suggestion:*\n${
-                  short.captions || "No caption generated"
+                  short.captions?.tiktok ||
+                  short.captions ||
+                  "No caption generated"
                 }\n\n` +
+                `🪙 *Tokens remaining:* ${data.tokens_remaining || 0}\n\n` +
+                `🌐 *View your short:* [Open Dashboard](${
+                  process.env.API_BASE_URL || "http://localhost:3000"
+                }/your-clip)\n` +
                 `🔗 *Original:* [View on YouTube](${videoUrl})`;
 
               if (messageId) {
@@ -134,38 +150,74 @@ const processVideoWithKlap = async (
                 });
               }
 
-              // If download URL is available, send the video
-              if (short.download_url) {
-                await bot.sendMessage(
-                  chatId,
-                  "📥 *Downloading your short...*",
-                  {
-                    parse_mode: "Markdown",
-                  }
-                );
-
-                try {
-                  await bot.sendVideo(chatId, short.download_url, {
-                    caption: `🎬 *${short.title}*\n\n${short.captions || ""}`,
-                    parse_mode: "Markdown",
-                  });
-                } catch (videoError) {
-                  // If sending as video fails, send download link
-                  await bot.sendMessage(
-                    chatId,
-                    `📥 *Download your short:*\n${short.download_url}`,
-                    { parse_mode: "Markdown" }
-                  );
+              await bot.sendMessage(
+                chatId,
+                `🎉 *Success!*\n\n` +
+                  `Your short "${short.title}" is ready!\n\n` +
+                  `📱 *View & Download:* [${
+                    process.env.API_BASE_URL || "http://localhost:3000"
+                  }/your-clip](${
+                    process.env.API_BASE_URL || "http://localhost:3000"
+                  }/your-clip)\n\n` +
+                  `💾 *Direct download:* ${short.download_url}`,
+                {
+                  parse_mode: "Markdown",
+                  disable_web_page_preview: false,
                 }
-              }
+              );
             }
 
-            // Handle errors
             if (data.status === "error") {
-              const errorMessage =
-                `❌ *Processing Failed*\n\n` +
-                `Error: ${data.message}\n` +
-                `${data.error ? `\nDetails: ${data.error}` : ""}`;
+              let errorMessage = `❌ *Processing Failed*\n\n`;
+
+              if (data.error_code === "video_too_long") {
+                errorMessage +=
+                  `🎬 *Video Too Long*\n\n` +
+                  `The video you selected is too long for processing.\n\n` +
+                  `📏 *Recommendation:* Use videos shorter than 10 minutes\n` +
+                  `⏱️ *Tip:* Shorter videos (2-5 minutes) work best for creating engaging shorts!`;
+              } else if (data.error_code === "invalid_url") {
+                errorMessage +=
+                  `🔗 *Invalid Video URL*\n\n` +
+                  `Please make sure:\n` +
+                  `• The YouTube video is public\n` +
+                  `• The URL is correct and accessible\n` +
+                  `• The video is not age-restricted`;
+              } else if (data.error_code === "unsupported_platform") {
+                errorMessage +=
+                  `🚫 *Unsupported Platform*\n\n` +
+                  `Currently only YouTube videos are supported.\n` +
+                  `Please share a YouTube video URL.`;
+              } else if (data.error_code === "fetch_shorts_failed") {
+                errorMessage +=
+                  `📥 *Fetch Failed*\n\n` +
+                  `Your video was processed successfully, but we couldn't retrieve the shorts from Klap.\n\n` +
+                  `✅ *Good news:* Your shorts are likely ready!\n` +
+                  `🌐 *Check Klap Dashboard:* https://app.klap.app\n` +
+                  `🆔 *Project ID:* ${data.project_id || "Not available"}\n\n` +
+                  `📧 *Need help?* Contact support with the Project ID above.`;
+              } else if (data.error_code === "no_shorts_generated") {
+                errorMessage +=
+                  `🤔 *No Shorts Generated*\n\n` +
+                  `The AI couldn't create engaging shorts from this video.\n\n` +
+                  `This might happen when:\n` +
+                  `• Video has mostly music/no clear speech\n` +
+                  `• Content is too complex or abstract\n` +
+                  `• Video quality is too low\n\n` +
+                  `💡 *Try videos with:*\n` +
+                  `• Clear speech/dialogue\n` +
+                  `• Engaging visual content\n` +
+                  `• Educational or entertaining topics\n` +
+                  `• Good audio quality`;
+              } else {
+                errorMessage +=
+                  `Error: ${data.message}\n` +
+                  `${
+                    data.error_details ? `\nDetails: ${data.error_details}` : ""
+                  }`;
+              }
+
+              errorMessage += `\n\n💡 *Try again with a different video or contact support if the problem persists.*`;
 
               if (messageId) {
                 await bot.editMessageText(errorMessage, {
@@ -209,61 +261,7 @@ const processVideoWithKlap = async (
   }
 };
 
-// Helper function untuk link account dengan proper error handling
-const linkAccount = async (
-  email: string,
-  chatId: number,
-  telegramName: string,
-  telegramUsername?: string
-) => {
-  const payload = {
-    email: email.trim(),
-    chatId: parseInt(chatId.toString()),
-    telegramName: telegramName,
-    telegramUsername: telegramUsername || null,
-  };
-
-  console.log("📤 Sending payload to API:", payload);
-
-  try {
-    const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
-    const response = await axios.post(
-      `${API_URL}/api/telegram/link-by-email`,
-      payload,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        timeout: 15000, // 15 second timeout
-        validateStatus: (status: number) => status < 500, // Don't throw on 4xx errors
-      }
-    );
-
-    console.log("📨 API Response:", response.status, response.data);
-    return response.data;
-  } catch (error: any) {
-    if (error.response) {
-      // Server responded with error status
-      console.error(
-        "❌ API Error Response:",
-        error.response.status,
-        error.response.data
-      );
-      throw new Error(error.response.data?.message || "Server error");
-    } else if (error.request) {
-      // Request was made but no response
-      console.error("❌ No response from API:", error.message);
-      throw new Error("Tidak dapat terhubung ke server");
-    } else {
-      // Something else happened
-      console.error("❌ Request setup error:", error.message);
-      throw new Error("Gagal mengirim request");
-    }
-  }
-};
-
-// Handle callback queries (button clicks)
+// Handle callback queries (video generation)
 bot.on("callback_query", async (query: any) => {
   const chatId = query.message.chat.id;
   const data = query.data;
@@ -273,18 +271,15 @@ bot.on("callback_query", async (query: any) => {
 
   console.log(`🔘 Callback query from ${userName} (${userId}): ${data}`);
 
-  // Handle /generateVideo callback
   if (data.startsWith("/generateVideo ")) {
     const videoUrl = data.replace("/generateVideo ", "");
 
     try {
-      // Answer callback query immediately to remove loading state
       await bot.answerCallbackQuery(query.id, {
         text: "🎬 Processing your video...",
         show_alert: false,
       });
 
-      // Send processing message
       await bot.sendMessage(
         chatId,
         `🎬 *Generating Short/Reel*\n\n` +
@@ -296,30 +291,7 @@ bot.on("callback_query", async (query: any) => {
         }
       );
 
-      // TODO: Add actual video processing logic here
-      // For now, we'll just simulate the process
-
-      // You can call your API endpoint here to process the video
-      // Example:
-      // const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
-      // const result = await axios.post(`${API_URL}/api/video/generate`, {
-      //   videoUrl,
-      //   userId,
-      //   chatId
-      // });
       await processVideoWithKlap(videoUrl, chatId, userId);
-
-      // For testing, send a success message after 2 seconds
-      setTimeout(async () => {
-        await bot.sendMessage(
-          chatId,
-          `✅ *Video Ready!*\n\n` +
-            `Your Short/Reel has been generated successfully!\n\n` +
-            `🎬 Original: ${videoUrl}\n` +
-            `📱 View your Short/Reel in the ReeruAI dashboard`,
-          { parse_mode: "Markdown" }
-        );
-      }, 2000);
     } catch (error: any) {
       console.error("❌ Error handling callback query:", error);
 
@@ -337,7 +309,7 @@ bot.on("callback_query", async (query: any) => {
   }
 });
 
-// Handle incoming messages
+// Handle incoming messages - Email → OTP Flow
 bot.on("message", async (msg: any) => {
   const chatId = msg.chat.id;
   const text = msg.text;
@@ -346,130 +318,270 @@ bot.on("message", async (msg: any) => {
 
   console.log(`📩 Message from ${name} (${chatId}): ${text}`);
 
-  // Skip jika pesan adalah command
+  // Skip commands
   if (text && text.startsWith("/")) {
     return;
   }
 
-  // Cek apakah pesan adalah email (basic email validation)
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const currentState = userStates.get(chatId) || { step: "waiting_email" };
 
+  // Handle 6-digit OTP code
+  const otpPattern = /^\d{6}$/;
+  if (text && otpPattern.test(text.trim())) {
+    console.log(`🔐 OTP received: ${text.trim()}`);
+
+    if (currentState.step === "waiting_otp" && currentState.email) {
+      // Complete email linking with OTP
+      try {
+        const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
+        const response = await axios.post(
+          `${API_URL}/api/telegram/complete-email-linking`,
+          {
+            otpCode: text.trim(),
+            chatId: chatId,
+          },
+          {
+            headers: { "Content-Type": "application/json" },
+            timeout: 10000,
+          }
+        );
+
+        if (response.data.success) {
+          userStates.delete(chatId); // Clear state
+
+          await bot.sendMessage(
+            chatId,
+            `✅ *Account Connected Successfully!*\n\n` +
+              `🎉 Welcome ${name}!\n\n` +
+              `Your Telegram account has been linked with:\n` +
+              `👤 *Name:* ${response.data.user.name}\n` +
+              `📧 *Email:* ${response.data.user.email}\n\n` +
+              `🔔 You will now receive notifications from Reeru Bot.\n\n` +
+              `🚀 Ready to create amazing content!`,
+            { parse_mode: "Markdown" }
+          );
+
+          console.log(
+            `✅ Email + OTP linking completed for: ${response.data.user.name}`
+          );
+        } else {
+          await bot.sendMessage(
+            chatId,
+            `❌ *Verification Failed*\n\n${response.data.message}\n\n` +
+              `💡 *Try again:* Send your email address to restart the process.`,
+            { parse_mode: "Markdown" }
+          );
+        }
+      } catch (error: any) {
+        console.error("❌ Complete email linking error:", error);
+
+        let errorMessage = "❌ *Verification Failed*\n\n";
+
+        if (error.response?.data?.message) {
+          if (error.response.data.message.includes("Invalid OTP")) {
+            errorMessage +=
+              "❌ *Invalid or Expired OTP*\n\n" +
+              "The OTP code is either invalid, expired, or already used.\n\n" +
+              "💡 *Solution:*\n" +
+              "1. Go to your Reeru dashboard\n" +
+              "2. Generate a new OTP code\n" +
+              "3. Send the new code here";
+          } else if (
+            error.response.data.message.includes("verification session expired")
+          ) {
+            errorMessage +=
+              "⏰ *Session Expired*\n\n" +
+              "Your verification session has expired.\n\n" +
+              "💡 *Solution:* Send your email address again to restart.";
+            userStates.delete(chatId);
+          } else {
+            errorMessage += error.response.data.message;
+          }
+        } else {
+          errorMessage += "Unable to verify OTP. Please try again.";
+        }
+
+        await bot.sendMessage(chatId, errorMessage, { parse_mode: "Markdown" });
+      }
+    } else {
+      // User sent OTP but not in correct flow
+      await bot.sendMessage(
+        chatId,
+        `🔐 *OTP Code Detected*\n\n` +
+          `I see you sent a 6-digit code, but you need to send your email address first.\n\n` +
+          `📧 *Please send your email:* user@example.com\n` +
+          `Then I'll ask for your OTP code! 😊`,
+        { parse_mode: "Markdown" }
+      );
+    }
+    return;
+  }
+
+  // Handle email address
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (text && emailPattern.test(text.trim())) {
-    console.log(`🔗 Attempting to link email: ${text.trim()}`);
+    console.log(`📧 Email linking initiated: ${text.trim()}`);
 
     try {
-      const result = await linkAccount(text.trim(), chatId, name, username);
+      const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
+      const response = await axios.post(
+        `${API_URL}/api/telegram/initiate-email-linking`,
+        {
+          email: text.trim(),
+          chatId: chatId,
+          telegramName: name,
+          telegramUsername: username,
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: 10000,
+        }
+      );
 
-      if (result.success) {
+      if (response.data.success) {
+        // Set user state to waiting for OTP
+        userStates.set(chatId, {
+          step: "waiting_otp",
+          email: text.trim(),
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        });
+
         await bot.sendMessage(
           chatId,
-          `✅ *Berhasil terhubung!*\n\n` +
-            `Halo ${name}! Akun Telegram Anda telah berhasil dihubungkan dengan:\n\n` +
-            `👤 *Nama:* ${result.user.name}\n` +
-            `📧 *Email:* ${result.user.email}\n\n` +
-            `Sekarang Anda akan menerima notifikasi dari Reeru Bot. 🔔`,
+          `✅ *Email Verified!*\n\n` +
+            `👤 *Account Found:* ${response.data.user.name}\n` +
+            `📧 *Email:* ${response.data.user.email}\n\n` +
+            `🔐 *Next Step:*\n` +
+            `1️⃣ Go to your Reeru dashboard\n` +
+            `2️⃣ Generate OTP code\n` +
+            `3️⃣ Send the 6-digit code here\n\n` +
+            `⏰ *Hurry!* This session expires in 10 minutes.\n` +
+            `🔄 To restart, just send your email again.`,
           { parse_mode: "Markdown" }
         );
 
-        console.log(`✅ Successfully linked: ${result.user.name} (${chatId})`);
+        console.log(
+          `✅ Email verified, waiting for OTP: ${response.data.user.name}`
+        );
       } else {
-        // Handle API success: false response
         await bot.sendMessage(
           chatId,
-          `❌ *Gagal menghubungkan akun*\n\n${result.message}`,
+          `❌ *Email Verification Failed*\n\n${response.data.message}`,
           { parse_mode: "Markdown" }
         );
       }
     } catch (error: any) {
-      console.log("❌ Link process error:", error.message);
+      console.log("❌ Email initiation error:", error.message);
 
-      let errorMessage = "❌ *Gagal menghubungkan akun*\n\n";
+      let errorMessage = "❌ *Email Verification Failed*\n\n";
+      const errorCode = error.response?.data?.errorCode;
 
-      if (error.message.includes("tidak ditemukan")) {
-        errorMessage +=
-          "Email tidak ditemukan di sistem Reeru. Pastikan email sudah terdaftar.";
-      } else if (error.message.includes("sudah terhubung")) {
-        errorMessage += "Akun Telegram ini sudah terhubung dengan user lain.";
-      } else if (error.message.includes("server")) {
-        errorMessage +=
-          "Terjadi masalah dengan server. Silakan coba lagi dalam beberapa saat.";
-      } else {
-        errorMessage += `${error.message}\n\nSilakan coba lagi atau hubungi support.`;
+      switch (errorCode) {
+        case "email_not_found":
+          errorMessage +=
+            "📧 *Email Not Found*\n\n" +
+            "The email you entered is not registered in Reeru system.\n\n" +
+            "💡 *Solutions:*\n" +
+            "• Make sure email is registered in Reeru\n" +
+            "• Check spelling carefully\n" +
+            "• Register new account if needed";
+          break;
+
+        case "telegram_already_linked_to_other_user":
+          errorMessage +=
+            "🔗 *Telegram Already Connected*\n\n" +
+            "This Telegram account is already linked to another user.\n\n" +
+            "💡 *Solutions:*\n" +
+            "• Use a different Telegram account\n" +
+            "• Contact support to disconnect old connection";
+          break;
+
+        case "email_already_linked_to_other_telegram":
+          errorMessage +=
+            "📱 *Email Already Connected*\n\n" +
+            "This email is already linked to another Telegram account.\n\n" +
+            "💡 *Solutions:*\n" +
+            "• Use the previously connected Telegram account\n" +
+            "• Contact support to disconnect old connection";
+          break;
+
+        default:
+          errorMessage += `${
+            error.response?.data?.message || error.message
+          }\n\n💡 Please try again or contact support.`;
       }
 
-      await bot.sendMessage(chatId, errorMessage, {
-        parse_mode: "Markdown",
-      });
+      await bot.sendMessage(chatId, errorMessage, { parse_mode: "Markdown" });
     }
-  } else {
-    // Instruksi untuk user jika bukan email yang valid
-    await bot.sendMessage(
-      chatId,
-      `👋 Halo ${name}! Selamat datang di *Reeru Bot*\n\n` +
-        `🤖 Untuk menghubungkan akun Reeru dengan Telegram, kirim email yang terdaftar di Reeru.\n\n` +
-        `📧 Contoh: *user@example.com*\n\n` +
-        `⚠️ Pastikan format email benar dan sudah terdaftar di sistem Reeru.\n\n` +
-        `Setelah terhubung, Anda akan menerima notifikasi penting dari Reeru.`,
-      { parse_mode: "Markdown" }
-    );
+    return;
   }
+
+  // Default welcome message
+  await bot.sendMessage(
+    chatId,
+    `👋 Halo ${name}! Selamat datang di *Reeru Bot*\n\n` +
+      `🔗 *Connect your account in 2 easy steps:*\n\n` +
+      `*Step 1:* Send your registered email address\n` +
+      `📧 Example: *user@example.com*\n\n` +
+      `*Step 2:* I'll verify your email, then you send OTP from dashboard\n` +
+      `🔐 Example: *123456*\n\n` +
+      `⚡ Simple, secure, and fast! Let's start with your email. 😊`,
+    { parse_mode: "Markdown" }
+  );
 });
 
-// Handle /start command
+// Commands
 bot.onText(/\/start/, async (msg: any) => {
   const chatId = msg.chat.id;
   const name = msg.from.first_name;
 
   await bot.sendMessage(
     chatId,
-    `🎉 Selamat datang di *Reeru Bot*, ${name}!\n\n` +
-      `Untuk menghubungkan akun Anda:\n` +
-      `1️⃣ Kirim email yang terdaftar di Reeru\n` +
-      `2️⃣ Akun akan terhubung otomatis\n` +
-      `3️⃣ Mulai terima notifikasi\n\n` +
-      `📧 Contoh: user@example.com\n\n` +
-      `⚡ Pastikan email yang dikirim sudah terdaftar di sistem Reeru!`,
+    `🎉 Welcome to *Reeru Bot*, ${name}!\n\n` +
+      `🔗 *Connect your account:*\n\n` +
+      `*Step 1:* Send your registered email\n` +
+      `*Step 2:* Send OTP from your dashboard\n\n` +
+      `📧 Start by sending your email address!\n` +
+      `Example: user@example.com`,
     { parse_mode: "Markdown" }
   );
 });
 
-// Handle /help command
 bot.onText(/\/help/, async (msg: any) => {
   const chatId = msg.chat.id;
 
   await bot.sendMessage(
     chatId,
-    `❓ *Bantuan Reeru Bot*\n\n` +
-      `*Perintah yang tersedia:*\n` +
-      `• /start - Mulai menggunakan bot\n` +
-      `• /help - Tampilkan bantuan ini\n\n` +
-      `*Cara menghubungkan akun:*\n` +
-      `1. Kirim email Reeru Anda ke chat ini\n` +
-      `2. Bot akan menghubungkan otomatis\n` +
-      `3. Anda akan menerima konfirmasi\n\n` +
-      `*Contoh email:* user@example.com\n\n` +
-      `*Catatan:* Email harus sudah terdaftar di sistem Reeru.`,
+    `❓ *Reeru Bot Help*\n\n` +
+      `*Available Commands:*\n` +
+      `• /start - Get started\n` +
+      `• /help - Show this help\n` +
+      `• /status - Check connection status\n\n` +
+      `*How to Connect:*\n` +
+      `1. Send your registered email\n` +
+      `2. Go to Reeru dashboard\n` +
+      `3. Generate OTP code\n` +
+      `4. Send 6-digit code here\n\n` +
+      `*Example:* user@example.com → 123456`,
     { parse_mode: "Markdown" }
   );
 });
 
-// Handle /status command
 bot.onText(/\/status/, async (msg: any) => {
   const chatId = msg.chat.id;
   const name = msg.from.first_name;
 
   await bot.sendMessage(
     chatId,
-    `📊 *Status Koneksi*\n\n` +
-      `👤 Nama: ${name}\n` +
+    `📊 *Connection Status*\n\n` +
+      `👤 Name: ${name}\n` +
       `🆔 Chat ID: ${chatId}\n\n` +
-      `Untuk mengecek apakah akun sudah terhubung, coba kirim email Anda. ` +
-      `Jika sudah terhubung, bot akan memberitahu bahwa akun sudah terhubung.`,
+      `To check if your account is connected, send your email address. ` +
+      `The bot will tell you if it's already linked.`,
     { parse_mode: "Markdown" }
   );
 });
 
-// Handle /testReminder command (for testing daily reminder)
 bot.onText(/\/testReminder/, async (msg: any) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -477,9 +589,7 @@ bot.onText(/\/testReminder/, async (msg: any) => {
   console.log(`🧪 Test reminder requested by ${userId}`);
 
   try {
-    // Test the daily reminder for this specific user
     await cronService.testDailyReminder();
-
     await bot.sendMessage(
       chatId,
       `✅ *Test Reminder Sent*\n\nCheck your messages for the daily reminder format!`,
@@ -487,7 +597,6 @@ bot.onText(/\/testReminder/, async (msg: any) => {
     );
   } catch (error: any) {
     console.error("❌ Error testing reminder:", error);
-
     await bot.sendMessage(
       chatId,
       `❌ *Error*\n\nFailed to send test reminder. Please make sure your account is linked.`,
@@ -496,7 +605,18 @@ bot.onText(/\/testReminder/, async (msg: any) => {
   }
 });
 
-// Error handling untuk polling
+// Clean up expired states periodically
+setInterval(() => {
+  const now = new Date();
+  for (const [chatId, state] of userStates.entries()) {
+    if (state.expiresAt && state.expiresAt < now) {
+      userStates.delete(chatId);
+      console.log(`🧹 Cleaned expired state for chatId: ${chatId}`);
+    }
+  }
+}, 5 * 60 * 1000); // Clean every 5 minutes
+
+// Error handling
 bot.on("polling_error", (error: any) => {
   console.log("❌ Polling error:", error.code, error.message);
 });

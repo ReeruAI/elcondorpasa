@@ -27,12 +27,12 @@ class CronService {
   // Daily reminder - setiap hari jam 9 pagi
   startDailyReminder() {
     const job = cron.schedule(
-      "* 10 * * *", // Run every minute for testing
+      "* 10 * * *", // Run every minute for testing (change to "0 9 * * *" for production)
       async () => {
         await this.sendDailyReminder();
       },
       {
-        timezone: "Asia/Jakarta", // Sesuaikan timezone
+        timezone: "Asia/Jakarta",
       }
     );
 
@@ -45,7 +45,7 @@ class CronService {
     await this.sendDailyReminder();
   }
 
-  // Logic untuk daily reminder
+  // Logic untuk daily reminder dengan auto hit gemini API
   private async sendDailyReminder() {
     try {
       const today = new Date().toLocaleDateString("id-ID", {
@@ -59,43 +59,222 @@ class CronService {
       const telegramUsers = await UserModel.getAllTelegramUsers();
 
       if (telegramUsers.length === 0) {
+        console.log("📭 No Telegram users found");
         return;
       }
 
-      // Kirim ke semua user dengan delay
+      console.log(`📡 Processing ${telegramUsers.length} Telegram users...`);
+
+      // Process setiap user dengan delay
       let successCount = 0;
       for (const user of telegramUsers) {
         try {
-          // Get user's history data
-          const userHistory = await HistoryModel.getHistoryByUserId(
-            user._id.toString(),
-            5, // Get last 5 history entries
-            0
+          console.log(`🔄 Processing user: ${user._id}`);
+
+          // Hit Gemini API untuk mendapatkan fresh recommendations
+          const userHistory = await this.ensureFreshRecommendations(
+            user._id.toString()
           );
 
-          // Send multi-part personalized message
-          const success = await this.sendMultiPartMessage(
-            user._id.toString(),
-            today,
-            userHistory
-          );
+          if (userHistory && userHistory.length > 0) {
+            // Send multi-part personalized message
+            const success = await this.sendMultiPartMessage(
+              user._id.toString(),
+              today,
+              userHistory
+            );
 
-          if (success) {
-            successCount++;
+            if (success) {
+              successCount++;
+              console.log(`✅ Successfully sent to user: ${user._id}`);
+            }
+          } else {
+            console.log(
+              `⚠️ No recommendations available for user: ${user._id}`
+            );
           }
 
-          // Delay 1000ms untuk avoid rate limiting (increased from 200ms for multiple messages)
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          // Delay untuk avoid rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         } catch (error) {
-          console.error(`Error sending to user ${user._id}:`, error);
+          console.error(`❌ Error processing user ${user._id}:`, error);
         }
       }
 
       console.log(
-        `✅ Daily reminder sent: ${successCount}/${telegramUsers.length} successful`
+        `🎯 Daily reminder completed: ${successCount}/${telegramUsers.length} successful`
       );
     } catch (error) {
-      console.error("Daily reminder error:", error);
+      console.error("❌ Daily reminder error:", error);
+    }
+  }
+
+  // Logic untuk ensure fresh recommendations dari Gemini API
+  private async ensureFreshRecommendations(userId: string): Promise<History[]> {
+    try {
+      // 1. Ambil user history terbaru
+      const userHistory = await HistoryModel.getHistoryByUserId(userId, 1, 0);
+
+      // 2. Check apakah sudah ada data hari ini
+      const today = new Date();
+      const todayStart = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      );
+
+      let needsNewRecommendations = true;
+
+      if (userHistory && userHistory.length > 0) {
+        const latestHistory = userHistory[0];
+
+        // Check if createdAt exists and is valid
+        if (latestHistory.createdAt) {
+          const historyDate = new Date(latestHistory.createdAt);
+          const historyStart = new Date(
+            historyDate.getFullYear(),
+            historyDate.getMonth(),
+            historyDate.getDate()
+          );
+
+          // Jika data sudah dari hari ini, tidak perlu hit API lagi
+          if (historyStart.getTime() === todayStart.getTime()) {
+            console.log(
+              `🎯 Fresh data found for user ${userId}, skipping API call`
+            );
+            needsNewRecommendations = false;
+          }
+        }
+      }
+
+      // 3. Jika perlu recommendations baru, hit Gemini API
+      if (needsNewRecommendations) {
+        console.log(`🔍 Fetching fresh recommendations for user ${userId}`);
+
+        // Get user's preferences dari history terakhir atau default
+        const { contentPreference, languagePreference } =
+          this.getUserPreferences(userHistory);
+
+        // Hit Gemini API
+        const success = await this.hitGeminiAPI(
+          userId,
+          contentPreference,
+          languagePreference
+        );
+
+        if (success) {
+          // Ambil data terbaru setelah hit API
+          const freshHistory = await HistoryModel.getHistoryByUserId(
+            userId,
+            1,
+            0
+          );
+          console.log(`✅ Fresh recommendations obtained for user ${userId}`);
+          return freshHistory || [];
+        } else {
+          console.log(
+            `⚠️ Failed to get fresh recommendations for user ${userId}`
+          );
+          return userHistory || [];
+        }
+      }
+
+      return userHistory || [];
+    } catch (error) {
+      console.error(
+        `❌ Error ensuring fresh recommendations for user ${userId}:`,
+        error
+      );
+      return [];
+    }
+  }
+
+  // Get user preferences dari history atau default values
+  private getUserPreferences(userHistory: History[]): {
+    contentPreference: string;
+    languagePreference: string;
+  } {
+    if (userHistory && userHistory.length > 0) {
+      const latestHistory = userHistory[0];
+      return {
+        contentPreference: latestHistory.contentPreference || "technology",
+        languagePreference: latestHistory.languagePreference || "english",
+      };
+    }
+
+    // Default preferences jika tidak ada history
+    return {
+      contentPreference: "technology",
+      languagePreference: "english",
+    };
+  }
+
+  // Hit Gemini API untuk mendapatkan recommendations
+  private async hitGeminiAPI(
+    userId: string,
+    contentPreference: string,
+    languagePreference: string
+  ): Promise<boolean> {
+    try {
+      console.log(`🤖 Calling Gemini API for user ${userId}...`);
+
+      // Prepare request data
+      const requestBody = {
+        contentPreference,
+        languagePreference,
+      };
+
+      // Hit internal API route
+      const response = await fetch(
+        `${
+          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+        }/api/gemini/route`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-userId": userId,
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!response.ok) {
+        console.error(
+          `❌ Gemini API call failed for user ${userId}: ${response.status} ${response.statusText}`
+        );
+        return false;
+      }
+
+      // Since it's a streaming response, we need to consume the stream
+      const reader = response.body?.getReader();
+      if (reader) {
+        let completed = false;
+
+        while (!completed) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            completed = true;
+            break;
+          }
+
+          // Convert Uint8Array to string
+          const chunk = new TextDecoder().decode(value);
+
+          // Check for completion marker
+          if (chunk.includes("[DONE]")) {
+            completed = true;
+            break;
+          }
+        }
+      }
+
+      console.log(`✅ Gemini API call completed for user ${userId}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error hitting Gemini API for user ${userId}:`, error);
+      return false;
     }
   }
 
