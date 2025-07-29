@@ -1,8 +1,15 @@
 import { RefObject, useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  RefreshCw,
+  TrendingUp,
+} from "lucide-react";
 import { TrendingVideo } from "@/types";
 import { VideoCard } from "./VideoCard";
+import { VideoCardSkeleton } from "./VideoCardSkeleton";
 
 interface VideoCarouselProps {
   videos: TrendingVideo[];
@@ -15,6 +22,11 @@ interface VideoCarouselProps {
   showRefreshButton?: boolean;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  title?: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  refreshDisabledMessage?: string;
+  isLoading: boolean;
+  skeletonCount?: number;
 }
 
 export const VideoCarousel: React.FC<VideoCarouselProps> = ({
@@ -28,6 +40,10 @@ export const VideoCarousel: React.FC<VideoCarouselProps> = ({
   showRefreshButton = false,
   onRefresh,
   isRefreshing = false,
+  title = "AI-Recommended Trending Videos",
+  icon: Icon = TrendingUp,
+  isLoading,
+  skeletonCount = 4,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -139,14 +155,54 @@ export const VideoCarousel: React.FC<VideoCarouselProps> = ({
         )}
       </AnimatePresence>
 
-      <div className="flex gap-3 justify-end mb-6">
-        {showRefreshButton && onRefresh && (
+      {/* Header with title and controls in one line */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Icon className="w-6 h-6 text-[#D68CB8]" />
+          <h2 className="text-xl sm:text-2xl font-semibold">{title}</h2>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {showRefreshButton && onRefresh && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onRefresh}
+              disabled={isRefreshing || isStreaming}
+              className="p-3 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              style={{
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.15)";
+                e.currentTarget.style.boxShadow =
+                  "0 10px 30px rgba(214, 140, 184, 0.2)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.1)";
+                e.currentTarget.style.boxShadow = "";
+              }}
+              title="Refresh recommendations"
+            >
+              <RefreshCw
+                className={`w-5 h-5 text-white ${
+                  isRefreshing ? "animate-spin" : ""
+                }`}
+              />
+            </motion.button>
+          )}
+
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onRefresh}
-            disabled={isRefreshing || isStreaming}
-            className="p-3 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+            whileHover={{ scale: canScrollLeft ? 1.05 : 1 }}
+            whileTap={{ scale: canScrollLeft ? 0.95 : 1 }}
+            onClick={() => canScrollLeft && onScroll("left")}
+            disabled={!canScrollLeft}
+            className="p-3 rounded-xl transition-all duration-300 shadow-lg disabled:opacity-30 disabled:cursor-not-allowed"
             style={{
               backgroundColor: "rgba(255, 255, 255, 0.1)",
               backdropFilter: "blur(10px)",
@@ -154,81 +210,51 @@ export const VideoCarousel: React.FC<VideoCarouselProps> = ({
               border: "1px solid rgba(255, 255, 255, 0.1)",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor =
-                "rgba(255, 255, 255, 0.15)";
-              e.currentTarget.style.boxShadow =
-                "0 10px 30px rgba(214, 140, 184, 0.2)";
+              if (canScrollLeft) {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.15)";
+                e.currentTarget.style.boxShadow =
+                  "0 10px 30px rgba(214, 140, 184, 0.2)";
+              }
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor =
                 "rgba(255, 255, 255, 0.1)";
               e.currentTarget.style.boxShadow = "";
             }}
-            title="Refresh recommendations"
           >
-            <RefreshCw
-              className={`w-5 h-5 text-white ${
-                isRefreshing ? "animate-spin" : ""
-              }`}
-            />
+            <ChevronLeft className="w-5 h-5 text-white" />
           </motion.button>
-        )}
 
-        <motion.button
-          whileHover={{ scale: canScrollLeft ? 1.05 : 1 }}
-          whileTap={{ scale: canScrollLeft ? 0.95 : 1 }}
-          onClick={() => canScrollLeft && onScroll("left")}
-          disabled={!canScrollLeft}
-          className="p-3 rounded-xl transition-all duration-300 shadow-lg disabled:opacity-30 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: "rgba(255, 255, 255, 0.1)",
-            backdropFilter: "blur(10px)",
-            WebkitBackdropFilter: "blur(10px)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-          }}
-          onMouseEnter={(e) => {
-            if (canScrollLeft) {
+          <motion.button
+            whileHover={{ scale: canScrollRight ? 1.05 : 1 }}
+            whileTap={{ scale: canScrollRight ? 0.95 : 1 }}
+            onClick={() => canScrollRight && onScroll("right")}
+            disabled={!canScrollRight}
+            className="p-3 rounded-xl transition-all duration-300 shadow-lg disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: "rgba(255, 255, 255, 0.1)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+            }}
+            onMouseEnter={(e) => {
+              if (canScrollRight) {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.15)";
+                e.currentTarget.style.boxShadow =
+                  "0 10px 30px rgba(214, 140, 184, 0.2)";
+              }
+            }}
+            onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor =
-                "rgba(255, 255, 255, 0.15)";
-              e.currentTarget.style.boxShadow =
-                "0 10px 30px rgba(214, 140, 184, 0.2)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
-            e.currentTarget.style.boxShadow = "";
-          }}
-        >
-          <ChevronLeft className="w-5 h-5 text-white" />
-        </motion.button>
-
-        <motion.button
-          whileHover={{ scale: canScrollRight ? 1.05 : 1 }}
-          whileTap={{ scale: canScrollRight ? 0.95 : 1 }}
-          onClick={() => canScrollRight && onScroll("right")}
-          disabled={!canScrollRight}
-          className="p-3 rounded-xl transition-all duration-300 shadow-lg disabled:opacity-30 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: "rgba(255, 255, 255, 0.1)",
-            backdropFilter: "blur(10px)",
-            WebkitBackdropFilter: "blur(10px)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-          }}
-          onMouseEnter={(e) => {
-            if (canScrollRight) {
-              e.currentTarget.style.backgroundColor =
-                "rgba(255, 255, 255, 0.15)";
-              e.currentTarget.style.boxShadow =
-                "0 10px 30px rgba(214, 140, 184, 0.2)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
-            e.currentTarget.style.boxShadow = "";
-          }}
-        >
-          <ChevronRight className="w-5 h-5 text-white" />
-        </motion.button>
+                "rgba(255, 255, 255, 0.1)";
+              e.currentTarget.style.boxShadow = "";
+            }}
+          >
+            <ChevronRight className="w-5 h-5 text-white" />
+          </motion.button>
+        </div>
       </div>
 
       <div
@@ -259,14 +285,20 @@ export const VideoCarousel: React.FC<VideoCarouselProps> = ({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {videos.map((video, index) => (
-            <VideoCard
-              key={video.id}
-              video={video}
-              onClick={() => !isDragging && onVideoClick(video)}
-              index={index}
-            />
-          ))}
+          {isLoading || (videos.length === 0 && isStreaming)
+            ? // Show skeletons when loading
+              Array.from({ length: skeletonCount }).map((_, index) => (
+                <VideoCardSkeleton key={`skeleton-${index}`} index={index} />
+              ))
+            : // Show actual videos
+              videos.map((video, index) => (
+                <VideoCard
+                  key={video.id}
+                  video={video}
+                  onClick={() => !isDragging && onVideoClick(video)}
+                  index={index}
+                />
+              ))}
         </div>
       </div>
     </div>

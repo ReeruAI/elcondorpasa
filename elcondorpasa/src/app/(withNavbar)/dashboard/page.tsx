@@ -60,6 +60,9 @@ export default function Dashboard() {
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({});
   const [streamedVideos, setStreamedVideos] = useState<TrendingVideo[]>([]);
   const [showVideos, setShowVideos] = useState(false);
+  const [canRefreshRecommendations, setCanRefreshRecommendations] =
+    useState(true);
+  const [refreshLimitMessage, setRefreshLimitMessage] = useState("");
 
   // Klap processing states
   const [processingState, setProcessingState] = useState<ProcessingState>({
@@ -153,6 +156,18 @@ export default function Dashboard() {
                 const cleanMessage = parseStreamingMessage(parsed.message);
                 if (cleanMessage) {
                   setStreamingMessage(cleanMessage);
+
+                  // Check for the daily limit message
+                  if (
+                    cleanMessage.includes(
+                      "These are your videos for today! Come back tomorrow for fresh content."
+                    )
+                  ) {
+                    setCanRefreshRecommendations(false);
+                    setRefreshLimitMessage(
+                      "You've reached your daily refresh limit. Come back tomorrow for fresh content!"
+                    );
+                  }
                 }
               } else if (parsed.type === "video" && parsed.data) {
                 const newVideo = convertToTrendingVideo(parsed.data);
@@ -208,6 +223,11 @@ export default function Dashboard() {
         await processStreamingResponse(response, (videos) => {
           setTrendingVideos(videos);
         });
+
+        // If it's a refresh, also refresh history after recommendations complete
+        if (isRefresh) {
+          await fetchHistoryVideos();
+        }
       } catch (error) {
         console.error("Error streaming videos:", error);
         setIsStreamingVideos(false);
@@ -223,7 +243,7 @@ export default function Dashboard() {
         }
       }
     },
-    [processStreamingResponse]
+    [processStreamingResponse, fetchHistoryVideos, trendingVideos]
   );
 
   // Check user preferences and load trending videos
@@ -469,14 +489,17 @@ export default function Dashboard() {
     // Don't clear processing state when closing, just hide the modal
   };
 
-  const handleRefreshRecommendations = () => {
+  const handleRefreshRecommendations = async () => {
     if (
       !hasPreferences ||
       !userPreferences.contentPreference ||
-      !userPreferences.languagePreference
+      !userPreferences.languagePreference ||
+      !canRefreshRecommendations
     )
       return;
-    loadRecommendations(userPreferences, true);
+
+    await loadRecommendations(userPreferences, true);
+    await fetchHistoryVideos();
   };
 
   const handleVideoClick = (video: TrendingVideo) => {
@@ -554,15 +577,6 @@ export default function Dashboard() {
             transition={{ delay: 0.2 }}
             className="mb-12"
           >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="w-6 h-6 text-[#D68CB8]" />
-                <h2 className="text-xl sm:text-2xl font-semibold">
-                  AI-Recommended Trending Videos
-                </h2>
-              </div>
-            </div>
-
             {loadingPreferences ? (
               <div className="flex justify-center items-center h-64">
                 <Loader2 className="w-8 h-8 animate-spin text-[#D68CB8]" />
@@ -587,9 +601,16 @@ export default function Dashboard() {
                   isStreaming={isStreamingVideos}
                   streamingMessage={streamingMessage}
                   showStreamingOverlay={showVideos}
-                  showRefreshButton={hasPreferences || false}
+                  showRefreshButton={
+                    hasPreferences && canRefreshRecommendations
+                  }
                   onRefresh={handleRefreshRecommendations}
                   isRefreshing={isRefreshing}
+                  title="AI-Recommended Trending Videos"
+                  icon={TrendingUp}
+                  refreshDisabledMessage={refreshLimitMessage}
+                  isLoading={isStreamingVideos && !showVideos}
+                  skeletonCount={6}
                 />
               )
             ) : hasPreferences === false ? (
@@ -605,11 +626,16 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            {isLoadingHistory && historyVideos.length === 0 ? (
+            {(isLoadingHistory && historyVideos.length === 0) ||
+            (isRefreshing && isLoadingHistory) ? (
               <div className="flex justify-center items-center h-64">
                 <div className="text-center">
                   <Loader2 className="w-8 h-8 animate-spin text-[#D68CB8] mx-auto mb-4" />
-                  <p className="text-gray-400">Loading your history...</p>
+                  <p className="text-gray-400">
+                    {isRefreshing
+                      ? "Updating your history..."
+                      : "Loading your history..."}
+                  </p>
                 </div>
               </div>
             ) : historyVideos.length === 0 ? (
@@ -626,6 +652,10 @@ export default function Dashboard() {
                 onScroll={(direction) =>
                   scrollSlider(historySliderRef, direction)
                 }
+                title="Your Video History"
+                icon={History}
+                isLoading={isLoadingHistory && historyVideos.length === 0}
+                skeletonCount={4}
               />
             )}
           </motion.div>
