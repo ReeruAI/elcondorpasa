@@ -71,20 +71,20 @@ export async function POST(request: NextRequest) {
 
               // Progress updates
               let progressType = "general";
-              if (chunk.includes("🎯 Cache hit!")) progressType = "cacheHit";
-              else if (chunk.includes("📊 Checking refresh limit"))
+              if (chunk.includes("Cache hit!")) progressType = "cacheHit";
+              else if (chunk.includes("Checking refresh limit"))
                 progressType = "refreshCheck";
-              else if (chunk.includes("📊 Daily limit reached"))
+              else if (chunk.includes("Daily limit reached"))
                 progressType = "limitReached";
-              else if (chunk.includes("🧠 Generating"))
+              else if (chunk.includes("Generating"))
                 progressType = "queryGeneration";
-              else if (chunk.includes("🔍 Searching"))
+              else if (chunk.includes("Searching"))
                 progressType = "youtubeSearch";
-              else if (chunk.includes("🔄 Processing"))
+              else if (chunk.includes("Processing"))
                 progressType = "processing";
-              else if (chunk.includes("🤖 Analyzing"))
+              else if (chunk.includes("Analyzing"))
                 progressType = "geminiAnalysis";
-              else if (chunk.includes("💾 Caching")) progressType = "caching";
+              else if (chunk.includes("Caching")) progressType = "caching";
 
               const data = `data: ${JSON.stringify({
                 type: "progress",
@@ -119,12 +119,12 @@ export async function POST(request: NextRequest) {
               };
 
               const historyId = await HistoryModel.createHistory(historyData);
-              console.log("✅ History saved successfully with ID:", historyId);
+              console.log("History saved successfully with ID:", historyId);
             } catch (dbError) {
-              console.error("❌ Failed to save history:", dbError);
+              console.error("Failed to save history:", dbError);
             }
           } else if (isExhaustedRefresh) {
-            console.log("📝 Skipped history save - exhausted refresh request");
+            console.log("Skipped history save - exhausted refresh request");
           }
 
           // Send completion message

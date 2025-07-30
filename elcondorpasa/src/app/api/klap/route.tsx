@@ -7,14 +7,31 @@ export async function POST(request: NextRequest) {
   console.log("🚀 Klap API route called");
 
   try {
+    // Add this after parsing the request body
     const body = await request.json();
     const { video_url } = body;
+
     console.log("📹 Video URL received:", video_url);
 
     if (!video_url) {
       return NextResponse.json({ error: "Missing video_url" }, { status: 400 });
     }
 
+    const youtubeRegex =
+      /^https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|embed\/|v\/)|youtu\.be\/)[\w\-]+(&[\w=]*)?$/;
+
+    if (!youtubeRegex.test(video_url)) {
+      console.warn("⚠️ Non-YouTube URL provided:", video_url);
+      return NextResponse.json(
+        {
+          error:
+            "Currently only YouTube videos are supported. Please provide a valid YouTube URL.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Move KLAP_API_KEY check here
     if (!KLAP_API_KEY) {
       console.error("❌ KLAP_API_KEY not found in environment");
       return NextResponse.json(
@@ -22,7 +39,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-
     // Get userId from headers (web) or chatId (telegram)
     const userId = request.headers.get("x-userId");
     const chatId = request.headers.get("x-telegram-chat-id");
@@ -668,7 +684,7 @@ export async function POST(request: NextRequest) {
             // Poll until export is done
             let exportStatus = "processing";
             let exportResult = null;
-            const maxExportRetries = 40;
+            const maxExportRetries = 60;
 
             console.log("🔄 Starting export polling");
 

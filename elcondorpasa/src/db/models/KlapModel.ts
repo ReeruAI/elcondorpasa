@@ -11,6 +11,7 @@ interface UserShort {
     instagram: string;
   };
   download_url: string;
+  description?: string;
   created_at?: Date;
 }
 
