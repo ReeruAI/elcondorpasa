@@ -245,8 +245,7 @@ export default function DownloadButton({
   const buttonStyle: React.CSSProperties = {
     ...sizeStyles[size],
     ...variantStyles[variant],
-    border: "1px solid",
-    borderRadius: "6px",
+    borderRadius: "16px",
     cursor: isDownloading || disabled ? "not-allowed" : "pointer",
     fontWeight: "500",
     transition: "all 0.2s ease",

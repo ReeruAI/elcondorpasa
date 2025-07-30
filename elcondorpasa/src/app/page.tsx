@@ -231,12 +231,12 @@ const FEATURES: Feature[] = [
   {
     icon: Rocket,
     title: "Direct Publishing",
-    desc: "YouTube via Zapier",
+    desc: "Upload to YouTube",
   },
   {
     icon: RefreshCw,
     title: "Smart Notifications",
-    desc: "Telegram/Discord alerts",
+    desc: "Telegram alerts",
   },
 ];
 
@@ -350,14 +350,14 @@ export default function Home() {
                 transition={{ duration: 0.8, delay: 0.2 }}
                 className="text-3xl sm:text-5xl lg:text-7xl font-bold mb-4 sm:mb-6 text-white"
               >
-                Auto-Generate Viral YouTube Shorts in{" "}
+                Auto-Generate Viral YouTube Shorts,{" "}
                 <motion.span
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.6, delay: 0.6 }}
                   className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 block sm:inline"
                 >
-                  60 Seconds
+                  Without Hassle
                 </motion.span>
               </motion.h1>
 
@@ -563,32 +563,17 @@ export default function Home() {
                           WebkitBackdropFilter: "blur(10px)",
                         }}
                       >
-                        <img
-                          src={`https://placehold.co/600x400`}
-                          alt={`Short video ${i}`}
+                        <video
+                          src={`/short-${i}.mp4`}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
                           className="w-full h-full object-cover opacity-80"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <motion.div
-                            whileHover={{ scale: 1.2 }}
-                            className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg"
-                            style={{
-                              boxShadow: "0 10px 30px rgba(236, 72, 153, 0.3)",
-                            }}
-                          >
-                            <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
-                          </motion.div>
-                        </div>
-                        <div
-                          className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs text-white"
-                          style={{
-                            backgroundColor: "rgba(0, 0, 0, 0.7)",
-                            backdropFilter: "blur(10px)",
-                            WebkitBackdropFilter: "blur(10px)",
-                          }}
                         >
-                          0:{30 + i * 15}
-                        </div>
+                          <source src={`/short-${i}.mp4`} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </video>
                       </motion.div>
                     ))}
                   </div>
