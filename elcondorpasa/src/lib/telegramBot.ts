@@ -556,7 +556,8 @@ bot.onText(/\/help/, async (msg: any) => {
       `*Available Commands:*\n` +
       `• /start - Get started\n` +
       `• /help - Show this help\n` +
-      `• /status - Check connection status\n\n` +
+      `• /status - Check connection status\n` +
+      `• /unlink - Disconnect your account\n\n` +
       `*How to Connect:*\n` +
       `1. Send your registered email\n` +
       `2. Go to Reeru dashboard\n` +
@@ -571,15 +572,106 @@ bot.onText(/\/status/, async (msg: any) => {
   const chatId = msg.chat.id;
   const name = msg.from.first_name;
 
-  await bot.sendMessage(
-    chatId,
-    `📊 *Connection Status*\n\n` +
-      `👤 Name: ${name}\n` +
-      `🆔 Chat ID: ${chatId}\n\n` +
-      `To check if your account is connected, send your email address. ` +
-      `The bot will tell you if it's already linked.`,
-    { parse_mode: "Markdown" }
-  );
+  try {
+    // Check if user is linked by trying to get user info
+    const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
+    const response = await axios.post(
+      `${API_URL}/api/telegram/check-status`,
+      { chatId: chatId },
+      {
+        headers: { "Content-Type": "application/json" },
+        timeout: 5000,
+      }
+    );
+
+    if (response.data.success && response.data.user) {
+      await bot.sendMessage(
+        chatId,
+        `📊 *Connection Status*\n\n` +
+          `✅ *Connected!*\n\n` +
+          `👤 Name: ${response.data.user.name}\n` +
+          `📧 Email: ${response.data.user.email}\n` +
+          `🆔 Chat ID: ${chatId}\n\n` +
+          `🔔 You're receiving daily updates!\n` +
+          `📱 Use /unlink to disconnect`,
+        { parse_mode: "Markdown" }
+      );
+    } else {
+      await bot.sendMessage(
+        chatId,
+        `📊 *Connection Status*\n\n` +
+          `❌ *Not Connected*\n\n` +
+          `👤 Name: ${name}\n` +
+          `🆔 Chat ID: ${chatId}\n\n` +
+          `📧 Send your email to connect your account!`,
+        { parse_mode: "Markdown" }
+      );
+    }
+  } catch (error) {
+    await bot.sendMessage(
+      chatId,
+      `📊 *Connection Status*\n\n` +
+        `👤 Name: ${name}\n` +
+        `🆔 Chat ID: ${chatId}\n\n` +
+        `To check if your account is connected, send your email address. ` +
+        `The bot will tell you if it's already linked.`,
+      { parse_mode: "Markdown" }
+    );
+  }
+});
+
+bot.onText(/\/unlink/, async (msg: any) => {
+  const chatId = msg.chat.id;
+  const name = msg.from.first_name;
+
+  try {
+    const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
+    const response = await axios.post(
+      `${API_URL}/api/telegram/unlink`,
+      { chatId: chatId },
+      {
+        headers: { "Content-Type": "application/json" },
+        timeout: 10000,
+      }
+    );
+
+    if (response.data.success) {
+      await bot.sendMessage(
+        chatId,
+        `✅ *Account Disconnected Successfully!*\n\n` +
+          `👤 *Account:* ${response.data.user.name}\n` +
+          `📧 *Email:* ${response.data.user.email}\n\n` +
+          `🔕 You will no longer receive daily updates.\n` +
+          `📱 Your account is now unlinked from this Telegram.\n\n` +
+          `💡 *To reconnect:* Send your email address again anytime!`,
+        { parse_mode: "Markdown" }
+      );
+
+      console.log(
+        `✅ Account unlinked: ${response.data.user.name} (${chatId})`
+      );
+    } else {
+      await bot.sendMessage(
+        chatId,
+        `❌ *No Connected Account Found*\n\n` +
+          `This Telegram account is not linked to any Reeru account.\n\n` +
+          `📧 *To connect:* Send your registered email address`,
+        { parse_mode: "Markdown" }
+      );
+    }
+  } catch (error: any) {
+    console.error("❌ Unlink error:", error);
+
+    let errorMessage = "❌ *Failed to Disconnect Account*\n\n";
+
+    if (error.response?.data?.message) {
+      errorMessage += error.response.data.message;
+    } else {
+      errorMessage += "Unable to process unlink request. Please try again.";
+    }
+
+    await bot.sendMessage(chatId, errorMessage, { parse_mode: "Markdown" });
+  }
 });
 
 bot.onText(/\/testReminder/, async (msg: any) => {

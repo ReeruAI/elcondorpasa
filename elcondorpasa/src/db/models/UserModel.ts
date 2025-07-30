@@ -651,6 +651,48 @@ class UserModel {
       ),
     };
   }
+
+  /**
+   * Unlink Telegram account by chatId (for /unlink command)
+   */
+  static async unlinkTelegramByChatId(chatId: number) {
+    const collection = await this.collection();
+
+    // Find user with this chatId
+    const user = await collection.findOne({ telegramChatId: chatId });
+
+    if (!user) {
+      throw {
+        message: "No linked account found for this Telegram",
+        status: 404,
+      };
+    }
+
+    // Unlink Telegram and clean up all related data
+    const result = await collection.updateOne(
+      { _id: user._id },
+      {
+        $set: { telegram: false },
+        $unset: {
+          telegramChatId: 1,
+          telegramUsername: 1,
+          telegramOTP: 1, // Remove any active OTP
+          pendingTelegramVerification: 1, // Remove any pending verification
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      throw { message: "Failed to unlink account", status: 500 };
+    }
+
+    return {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      message: "Telegram account unlinked successfully",
+    };
+  }
 }
 
 export default UserModel;
