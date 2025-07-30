@@ -7,16 +7,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>
-        <TokenProvider>
-          <div className="pb-20">
-            <Navbar />
-          </div>
-          {/* Main content area */}
-          <main className="">{children}</main>
-        </TokenProvider>
-      </body>
-    </html>
+    <TokenProvider>
+      <div className="pb-20">
+        <Navbar />
+      </div>
+      {/* Main content area */}
+      <main className="">{children}</main>
+    </TokenProvider>
   );
 }

@@ -5,9 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, Sparkles, X, User, LogOut, Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { clearUserRecommendationData } from "@/app/(withNavbar)/dashboard/page";
 
 // Token context for global state management
 import { createContext, useContext } from "react";
+import Link from "next/link";
+import Image from "next/image";
 
 interface TokenContextType {
   tokens: number;
@@ -232,10 +235,20 @@ export default function Navbar() {
 
   const handleLogout = useCallback(async () => {
     try {
-      await fetch("/api/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      // Clear user-specific recommendation data
+      clearUserRecommendationData();
+
+      // Dispatch logout event for any components listening
+      window.dispatchEvent(new Event("userLogout"));
+
+      // Call logout API
+      await axios.post(
+        "/api/logout",
+        {},
+        {
+          withCredentials: true,
+        }
+      );
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
@@ -299,22 +312,29 @@ export default function Navbar() {
         <div className="flex justify-between h-20 md:h-24">
           {/* Logo */}
           <div className="flex items-center">
-            <a
-              href="/"
-              onClick={(e) => handleNavClick(e, "/")}
+            <Link
+              href="/dashboard"
+              onClick={(e) => handleNavClick(e, "/dashboard")}
               className="flex items-center space-x-2"
             >
               <motion.div
-                whileHover={{ scale: 1.1, rotate: 180 }}
+                whileHover={{ scale: 1.1 }}
                 transition={{ duration: 0.3 }}
                 className="text-[#D68CB8]"
               >
-                <Sparkles className="w-8 h-8 md:w-10 md:h-10" />
+                <Image
+                  src="/logo.svg"
+                  alt="Reeru AI Logo"
+                  width={100}
+                  height={100}
+                  priority
+                  className="w-15 h-15 md:w-15 md:h-15 lg:w-20 lg:h-20"
+                />
               </motion.div>
-              <span className="font-bold text-xl md:text-2xl text-white">
-                Reeru AI
+              <span className="font-bold text-xl md:text-2xl bg-gradient-to-r from-[#ec4899] to-[#a855f3] bg-clip-text text-transparent">
+                ReeruAI
               </span>
-            </a>
+            </Link>
           </div>
 
           {/* Desktop Navigation */}
@@ -340,7 +360,7 @@ export default function Navbar() {
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#D68CB8] to-pink-400 hover:shadow-lg hover:shadow-pink-500/30 transition-all duration-200"
+                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-r from-[#ec4899] to-[#a855f3] hover:shadow-lg hover:shadow-pink-500/30 transition-all duration-200"
                   >
                     <User className="w-5 h-5 text-white" />
                   </motion.button>
@@ -434,7 +454,7 @@ export default function Navbar() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between px-3 py-2">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-full flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-r from-[#ec4899] to-[#a855f3] flex items-center justify-center">
                           <User className="w-5 h-5 text-white" />
                         </div>
                         <TokenDisplay compact />

@@ -24,6 +24,8 @@ import {
 import LoadingScreen from "@/components/LoadingScreen";
 import { Feature, PricingTier, Stat, Step, Testimonial } from "@/types";
 import NavbarLanding from "@/components/NavbarLanding";
+import CursorGlow from "@/components/CursorGlow";
+import ParticleBackground from "@/components/yourclip/ParticleBackground";
 
 // TypeScript interfaces
 interface FadeInViewProps extends React.ComponentProps<typeof motion.div> {
@@ -37,6 +39,22 @@ interface ScaleButtonProps extends React.ComponentProps<typeof motion.button> {
   className?: string;
   onClick?: () => void;
 }
+
+// Animation variants
+const fadeInVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (delay: number = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, delay },
+  }),
+};
+
+const scaleVariants = {
+  idle: { scale: 1 },
+  hover: { scale: 1.05 },
+  tap: { scale: 0.95 },
+};
 
 // Reusable motion components
 const FadeInView: React.FC<FadeInViewProps> = ({
@@ -63,8 +81,10 @@ const ScaleButton: React.FC<ScaleButtonProps> = ({
   ...props
 }) => (
   <motion.button
-    whileHover={{ scale: 1.05 }}
-    whileTap={{ scale: 0.95 }}
+    variants={scaleVariants}
+    initial="idle"
+    whileHover="hover"
+    whileTap="tap"
     className={className}
     onClick={onClick}
     {...props}
@@ -87,11 +107,10 @@ const Section: React.FC<SectionProps> = ({
   children,
   className = "",
 }) => {
-  const bgClass = bgColor === "primary" ? "bg-[#1D1D1D]" : "bg-[#2A2A2A]";
   return (
     <section
       id={id}
-      className={`relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 ${bgClass} py-16 snap-start ${className}`}
+      className={`relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 py-16 snap-start ${className}`}
     >
       {children}
     </section>
@@ -112,14 +131,14 @@ const Heading: React.FC<HeadingProps> = ({
 }) => (
   <FadeInView>
     <h2
-      className={`text-3xl sm:text-4xl lg:text-5xl font-bold text-center ${
+      className={`text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-white ${
         subtitle ? "mb-4" : "mb-8 sm:mb-12"
       } ${className}`}
     >
       {children}
     </h2>
     {subtitle && (
-      <p className="text-center text-gray-400 mb-8 sm:mb-12 text-base sm:text-lg">
+      <p className="text-center text-gray-300 mb-8 sm:mb-12 text-base sm:text-lg">
         {subtitle}
       </p>
     )}
@@ -230,23 +249,41 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
 }) => (
   <motion.div
     whileHover={{ scale: 1.02 }}
-    className={`relative bg-[#2A2A2A] rounded-2xl overflow-hidden ${aspectRatio}`}
+    className={`relative rounded-2xl overflow-hidden ${aspectRatio}`}
+    style={{
+      backgroundColor: "rgba(255, 255, 255, 0.05)",
+      border: "1px solid rgba(255, 255, 255, 0.1)",
+      backdropFilter: "blur(10px)",
+      WebkitBackdropFilter: "blur(10px)",
+    }}
   >
     <img
       src="https://placehold.co/600x400"
       alt={title}
-      className="w-full h-full object-cover"
+      className="w-full h-full object-cover opacity-80"
     />
     <motion.div
       whileHover={{ scale: 1.1 }}
       className="absolute inset-0 flex items-center justify-center"
     >
-      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#D68CB8] rounded-full flex items-center justify-center">
+      <div
+        className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center shadow-2xl"
+        style={{
+          boxShadow: "0 20px 40px rgba(236, 72, 153, 0.3)",
+        }}
+      >
         <Play className="h-6 w-6 sm:h-8 sm:w-8 text-white ml-1" />
       </div>
     </motion.div>
     {duration && (
-      <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 bg-black/70 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm">
+      <div
+        className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm text-white"
+        style={{
+          backgroundColor: "rgba(0, 0, 0, 0.7)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+        }}
+      >
         {duration}
       </div>
     )}
@@ -265,28 +302,34 @@ export default function Home() {
       <LoadingScreen />
       <NavbarLanding />
       <Suspense fallback={<div className="min-h-screen" />}>
-        <div className="min-h-screen text-white overflow-x-hidden snap-y snap-mandatory">
+        <div className="min-h-screen text-white overflow-x-hidden snap-y snap-mandatory bg-gradient-to-b from-[#1D1D1D] to-black">
+          {/* Background Effects */}
+          <ParticleBackground />
+
+          {/* Cursor Glow Effect */}
+          <CursorGlow />
+
           {/* Hero Section */}
           <motion.section
             id="home"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8 }}
-            className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-[#1D1D1D] py-16 snap-start"
+            className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 py-16 snap-start"
           >
             <div className="relative z-10 max-w-6xl mx-auto text-center">
               <motion.h1
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
-                className="text-3xl sm:text-5xl lg:text-7xl font-bold mb-4 sm:mb-6"
+                className="text-3xl sm:text-5xl lg:text-7xl font-bold mb-4 sm:mb-6 text-white"
               >
                 Auto-Generate Viral YouTube Shorts in{" "}
                 <motion.span
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.6, delay: 0.6 }}
-                  className="text-transparent bg-clip-text bg-[#D68CB8] block sm:inline"
+                  className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 block sm:inline"
                 >
                   60 Seconds
                 </motion.span>
@@ -310,7 +353,28 @@ export default function Home() {
               >
                 <ScaleButton
                   onClick={handleRegisterClick}
-                  className="group px-6 sm:px-8 py-3 sm:py-4 bg-white/10 backdrop-blur-sm rounded-full font-semibold text-base sm:text-lg hover:bg-white/20 transition-all duration-300 flex items-center justify-center gap-2"
+                  className="group px-6 sm:px-8 py-3 sm:py-4 rounded-full font-semibold text-base sm:text-lg transition-all duration-300 flex items-center justify-center gap-2 text-white"
+                  style={{
+                    backgroundColor: "rgba(255, 255, 255, 0.05)",
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor =
+                      "rgba(255, 255, 255, 0.1)";
+                    e.currentTarget.style.border =
+                      "1px solid rgba(214, 140, 184, 0.5)";
+                    e.currentTarget.style.boxShadow =
+                      "0 0 20px rgba(214, 140, 184, 0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor =
+                      "rgba(255, 255, 255, 0.05)";
+                    e.currentTarget.style.border =
+                      "1px solid rgba(255, 255, 255, 0.1)";
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
                 >
                   Try for Free
                   <ArrowRight className="inline-block ml-2 w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
@@ -364,21 +428,30 @@ export default function Home() {
                     delay={index * 0.2}
                     y={50}
                     whileHover={{ y: -10 }}
-                    className="relative p-6 sm:p-8 rounded-2xl bg-[#1D1D1D] backdrop-blur-sm border border-white/10 transition-all duration-500"
+                    className="relative p-6 sm:p-8 rounded-2xl transition-all duration-500"
+                    style={{
+                      backgroundColor: "rgba(31, 31, 31, 0.3)",
+                      backdropFilter: "blur(20px)",
+                      WebkitBackdropFilter: "blur(20px)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                    }}
                   >
                     <motion.div
                       initial={{ scale: 0 }}
                       whileInView={{ scale: 1 }}
                       viewport={{ once: true }}
                       transition={{ duration: 0.5, delay: index * 0.2 + 0.3 }}
-                      className="absolute -top-3 -right-3 sm:-top-4 sm:-right-4 w-10 h-10 sm:w-12 sm:h-12 bg-[#D68CB8] rounded-full flex items-center justify-center font-bold text-base sm:text-lg"
+                      className="absolute -top-3 -right-3 sm:-top-4 sm:-right-4 w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-base sm:text-lg shadow-2xl"
+                      style={{
+                        boxShadow: "0 10px 30px rgba(236, 72, 153, 0.3)",
+                      }}
                     >
                       {index + 1}
                     </motion.div>
-                    <div className="mb-4 text-[#D68CB8]">
-                      <step.icon className="w-6 h-6 md:w-8 md:h-8" />
+                    <div className="mb-4">
+                      <step.icon className="w-6 h-6 md:w-8 md:h-8 text-pink-400" />
                     </div>
-                    <h3 className="text-lg sm:text-xl font-semibold mb-2">
+                    <h3 className="text-lg sm:text-xl font-semibold mb-2 text-white">
                       {step.title}
                     </h3>
                     <p className="text-sm sm:text-base text-gray-400">
@@ -403,9 +476,9 @@ export default function Home() {
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, delay: 0.9 + i * 0.1 }}
-                    className="flex items-center gap-2 text-white/90 font-bold"
+                    className="flex items-center gap-2 text-gray-300 font-bold"
                   >
-                    <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-[#D68CB8]" />
+                    <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-pink-400" />
                     {text}
                   </motion.span>
                 ))}
@@ -417,7 +490,7 @@ export default function Home() {
           <Section id="showcase" bgColor="primary">
             <div className="container mx-auto px-4">
               <FadeInView className="text-center mb-12 sm:mb-16">
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-white">
                   See the Magic in Action
                 </h2>
                 <p className="text-base sm:text-xl text-gray-300 max-w-2xl mx-auto px-4">
@@ -432,7 +505,7 @@ export default function Home() {
                   viewport={{ once: true }}
                   transition={{ duration: 0.8 }}
                 >
-                  <h3 className="text-xl sm:text-2xl font-bold mb-4 text-center">
+                  <h3 className="text-xl sm:text-2xl font-bold mb-4 text-center text-white">
                     Before
                   </h3>
                   <VideoPreview
@@ -447,7 +520,7 @@ export default function Home() {
                   viewport={{ once: true }}
                   transition={{ duration: 0.8 }}
                 >
-                  <h3 className="text-xl sm:text-2xl font-bold mb-4 text-center">
+                  <h3 className="text-xl sm:text-2xl font-bold mb-4 text-center text-white">
                     After
                   </h3>
                   <div className="grid grid-cols-3 gap-2 sm:gap-4">
@@ -459,22 +532,38 @@ export default function Home() {
                         viewport={{ once: true }}
                         transition={{ duration: 0.5, delay: i * 0.1 }}
                         whileHover={{ scale: 1.05, y: -5 }}
-                        className="relative bg-[#2A2A2A] rounded-xl overflow-hidden aspect-[9/16]"
+                        className="relative rounded-xl overflow-hidden aspect-[9/16]"
+                        style={{
+                          backgroundColor: "rgba(255, 255, 255, 0.05)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          backdropFilter: "blur(10px)",
+                          WebkitBackdropFilter: "blur(10px)",
+                        }}
                       >
                         <img
                           src={`https://placehold.co/600x400`}
                           alt={`Short video ${i}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover opacity-80"
                         />
                         <div className="absolute inset-0 flex items-center justify-center">
                           <motion.div
                             whileHover={{ scale: 1.2 }}
-                            className="w-8 h-8 sm:w-10 sm:h-10 bg-[#D68CB8] rounded-full flex items-center justify-center"
+                            className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg"
+                            style={{
+                              boxShadow: "0 10px 30px rgba(236, 72, 153, 0.3)",
+                            }}
                           >
                             <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
                           </motion.div>
                         </div>
-                        <div className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 bg-black/70 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs">
+                        <div
+                          className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs text-white"
+                          style={{
+                            backgroundColor: "rgba(0, 0, 0, 0.7)",
+                            backdropFilter: "blur(10px)",
+                            WebkitBackdropFilter: "blur(10px)",
+                          }}
+                        >
                           0:{30 + i * 15}
                         </div>
                       </motion.div>
@@ -499,26 +588,35 @@ export default function Home() {
                     delay={index * 0.2}
                     y={50}
                     whileHover={{ scale: 1.05, y: -10 }}
-                    className={`relative p-5 sm:p-6 rounded-2xl border transition-all duration-300 ${
-                      tier.popular
-                        ? "bg-gradient-to-b from-pink-900/20 to-pink-900/20 border-pink-200/50 shadow-xl shadow-pink-500/20"
-                        : "bg-white/5 border-white/10 hover:border-white/20"
-                    }`}
+                    className="relative p-5 sm:p-6 rounded-2xl transition-all duration-300"
+                    style={{
+                      backgroundColor: tier.popular
+                        ? "rgba(236, 72, 153, 0.1)"
+                        : "rgba(255, 255, 255, 0.05)",
+                      backdropFilter: "blur(20px)",
+                      WebkitBackdropFilter: "blur(20px)",
+                      border: tier.popular
+                        ? "1px solid rgba(236, 72, 153, 0.3)"
+                        : "1px solid rgba(255, 255, 255, 0.1)",
+                      boxShadow: tier.popular
+                        ? "0 20px 40px rgba(236, 72, 153, 0.2)"
+                        : "none",
+                    }}
                   >
                     {tier.popular && (
                       <motion.div
                         initial={{ scale: 0, y: -20 }}
                         animate={{ scale: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.5 }}
-                        className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 bg-[#D68CB8] rounded-full text-xs font-semibold"
+                        className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full text-xs font-semibold text-white"
                       >
                         POPULAR
                       </motion.div>
                     )}
-                    <h3 className="text-xl sm:text-2xl font-bold mb-2">
+                    <h3 className="text-xl sm:text-2xl font-bold mb-2 text-white">
                       {tier.name}
                     </h3>
-                    <div className="text-3xl sm:text-4xl font-bold mb-3 sm:mb-4">
+                    <div className="text-3xl sm:text-4xl font-bold mb-3 sm:mb-4 text-white">
                       {tier.tokens}
                       <span className="text-base sm:text-lg text-gray-400 font-normal">
                         {" "}
@@ -532,9 +630,35 @@ export default function Home() {
                       onClick={handleRegisterClick}
                       className={`w-full py-2.5 sm:py-3 rounded-full font-semibold text-sm sm:text-base transition-all duration-300 ${
                         tier.popular
-                          ? "bg-gradient-to-r from-pink-200 to-pink-400 hover:shadow-lg hover:shadow-pink-500/50"
-                          : "bg-white/10 hover:bg-white/20"
+                          ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg"
+                          : "text-white"
                       }`}
+                      style={{
+                        backgroundColor: tier.popular
+                          ? ""
+                          : "rgba(255, 255, 255, 0.1)",
+                        boxShadow: tier.popular
+                          ? "0 10px 30px rgba(236, 72, 153, 0.3)"
+                          : "none",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (tier.popular) {
+                          e.currentTarget.style.boxShadow =
+                            "0 15px 40px rgba(236, 72, 153, 0.4)";
+                        } else {
+                          e.currentTarget.style.backgroundColor =
+                            "rgba(255, 255, 255, 0.2)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (tier.popular) {
+                          e.currentTarget.style.boxShadow =
+                            "0 10px 30px rgba(236, 72, 153, 0.3)";
+                        } else {
+                          e.currentTarget.style.backgroundColor =
+                            "rgba(255, 255, 255, 0.1)";
+                        }
+                      }}
                     >
                       Get Started
                     </ScaleButton>
@@ -566,12 +690,29 @@ export default function Home() {
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
                     whileHover={{ scale: 1.05, y: -5 }}
-                    className="group p-5 sm:p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-pink-300/50 transition-all duration-300"
+                    className="group p-5 sm:p-6 rounded-2xl transition-all duration-300"
+                    style={{
+                      backgroundColor: "rgba(255, 255, 255, 0.05)",
+                      backdropFilter: "blur(20px)",
+                      WebkitBackdropFilter: "blur(20px)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.border =
+                        "1px solid rgba(236, 72, 153, 0.3)";
+                      e.currentTarget.style.boxShadow =
+                        "0 10px 30px rgba(236, 72, 153, 0.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.border =
+                        "1px solid rgba(255, 255, 255, 0.1)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
                   >
-                    <div className="mb-4 text-[#D68CB8]">
+                    <div className="mb-4 text-pink-400">
                       <feature.icon className="w-8 h-8 md:w-10 md:h-10" />
                     </div>
-                    <h3 className="text-lg sm:text-xl font-semibold mb-2">
+                    <h3 className="text-lg sm:text-xl font-semibold mb-2 text-white">
                       {feature.title}
                     </h3>
                     <p className="text-sm sm:text-base text-gray-400">
@@ -584,10 +725,12 @@ export default function Home() {
           </Section>
 
           {/* Testimonials and CTA */}
-          <div className="bg-[#2A2A2A] snap-start">
+          <div className="snap-start">
             <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
               <div className="max-w-4xl mx-auto w-full">
-                <Heading className="pt-10">Creators Love Reeru</Heading>
+                <Heading className="pt-10 relative z-10">
+                  Creators Love Reeru
+                </Heading>
 
                 <div className="space-y-4 sm:space-y-6">
                   {TESTIMONIALS.map((testimonial, index) => (
@@ -598,19 +741,28 @@ export default function Home() {
                       viewport={{ once: true }}
                       transition={{ duration: 0.6, delay: index * 0.2 }}
                       whileHover={{ scale: 1.02 }}
-                      className="p-5 sm:p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10"
+                      className="p-5 sm:p-6 rounded-2xl"
+                      style={{
+                        backgroundColor: "rgba(255, 255, 255, 0.05)",
+                        backdropFilter: "blur(20px)",
+                        WebkitBackdropFilter: "blur(20px)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                      }}
                     >
-                      <p className="text-base sm:text-lg mb-4 italic">
+                      <p className="text-base sm:text-lg mb-4 italic text-gray-300">
                         "{testimonial.quote}"
                       </p>
                       <div className="flex items-center gap-3">
                         <motion.div
                           whileHover={{ rotate: 360 }}
                           transition={{ duration: 0.6 }}
-                          className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full"
+                          className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full shadow-lg"
+                          style={{
+                            boxShadow: "0 10px 20px rgba(236, 72, 153, 0.3)",
+                          }}
                         />
                         <div>
-                          <p className="font-semibold text-sm sm:text-base">
+                          <p className="font-semibold text-sm sm:text-base text-white">
                             {testimonial.author}
                           </p>
                           <p className="text-xs sm:text-sm text-gray-400">
@@ -625,14 +777,14 @@ export default function Home() {
             </section>
 
             {/* Final CTA */}
-            <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
+            <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 relative z-10">
               <div className="max-w-4xl mx-auto text-center">
                 <motion.h2
                   initial={{ opacity: 0, scale: 0.9 }}
                   whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
+                  viewport={{ once: true, margin: "-100px" }}
                   transition={{ duration: 0.6 }}
-                  className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6"
+                  className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 text-white"
                 >
                   Start Creating Shorts in Minutes
                 </motion.h2>
@@ -645,7 +797,18 @@ export default function Home() {
                 <FadeInView delay={0.4}>
                   <ScaleButton
                     onClick={handleRegisterClick}
-                    className="group px-6 sm:px-10 py-3 sm:py-5 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full font-semibold text-base sm:text-xl hover:shadow-2xl hover:shadow-pink-400/50 transition-all duration-300 transform inline-flex items-center gap-2 sm:gap-3"
+                    className="group px-6 sm:px-10 py-3 sm:py-5 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full font-semibold text-base sm:text-xl transition-all duration-300 transform inline-flex items-center gap-2 sm:gap-3 text-white shadow-2xl"
+                    style={{
+                      boxShadow: "0 20px 40px rgba(236, 72, 153, 0.3)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow =
+                        "0 25px 50px rgba(236, 72, 153, 0.4)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow =
+                        "0 20px 40px rgba(236, 72, 153, 0.3)";
+                    }}
                   >
                     Try Reeru Free — Get 2 Tokens Today
                     <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
@@ -661,11 +824,11 @@ export default function Home() {
                       key={i}
                       initial={{ opacity: 0, y: 10 }}
                       whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
+                      viewport={{ once: true, margin: "-50px" }}
                       transition={{ duration: 0.5, delay: 0.7 + i * 0.1 }}
                       className="flex items-center gap-1 sm:gap-2"
                     >
-                      <item.icon className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-pink-400" />
                       {item.text}
                     </motion.span>
                   ))}

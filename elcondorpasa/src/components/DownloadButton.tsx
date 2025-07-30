@@ -16,6 +16,9 @@ interface DownloadButtonProps {
   size?: "small" | "medium" | "large";
   showProgress?: boolean;
   downloadMethod?: "direct" | "blob";
+  // Add mouse event handlers
+  onMouseEnter?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onMouseLeave?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 export default function DownloadButton({
@@ -32,6 +35,8 @@ export default function DownloadButton({
   size = "medium",
   showProgress = true,
   downloadMethod = "direct",
+  onMouseEnter,
+  onMouseLeave,
 }: DownloadButtonProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState("");
@@ -262,6 +267,8 @@ export default function DownloadButton({
         className={className}
         style={buttonStyle}
         type="button"
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
       >
         {isDownloading ? (
           <>

@@ -39,6 +39,24 @@ import {
   processKlapStream,
 } from "@/utils/klap";
 
+// Constants for localStorage keys
+const RECOMMENDATIONS_LOADED_KEY = "yourclip_recommendations_loaded";
+const RECOMMENDATIONS_DATA_KEY = "yourclip_recommendations_data";
+const RECOMMENDATIONS_TIMESTAMP_KEY = "yourclip_recommendations_timestamp";
+const REFRESH_USED_KEY = "yourclip_refresh_used";
+const REFRESH_USED_TIMESTAMP_KEY = "yourclip_refresh_timestamp";
+const USER_ID_KEY = "yourclip_current_user";
+
+// Export function to clear user data (can be called from logout)
+export const clearUserRecommendationData = () => {
+  localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+  localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+  localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+  localStorage.removeItem(REFRESH_USED_KEY);
+  localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+  localStorage.removeItem(USER_ID_KEY);
+};
+
 export default function Dashboard() {
   // State management
   const [url, setUrl] = useState("");
@@ -60,6 +78,11 @@ export default function Dashboard() {
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({});
   const [streamedVideos, setStreamedVideos] = useState<TrendingVideo[]>([]);
   const [showVideos, setShowVideos] = useState(false);
+  const [canRefreshRecommendations, setCanRefreshRecommendations] =
+    useState(true);
+  const [refreshLimitMessage, setRefreshLimitMessage] = useState("");
+  const [hasLoadedRecommendations, setHasLoadedRecommendations] =
+    useState(false);
 
   // Klap processing states
   const [processingState, setProcessingState] = useState<ProcessingState>({
@@ -81,8 +104,98 @@ export default function Dashboard() {
     null
   ) as React.RefObject<HTMLDivElement>;
 
+  // Clear all user-specific data from localStorage
+  const clearAllUserData = () => {
+    localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+    localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+    localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+    localStorage.removeItem(REFRESH_USED_KEY);
+    localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+    localStorage.removeItem(USER_ID_KEY);
+  };
+
+  // Helper function to check if refresh was already used today
+  const checkIfRefreshUsedToday = () => {
+    const refreshUsed = localStorage.getItem(REFRESH_USED_KEY);
+    const refreshTimestamp = localStorage.getItem(REFRESH_USED_TIMESTAMP_KEY);
+
+    if (refreshUsed === "true" && refreshTimestamp) {
+      const refreshDate = new Date(parseInt(refreshTimestamp));
+      const today = new Date();
+
+      // Check if it's the same day
+      if (refreshDate.toDateString() === today.toDateString()) {
+        return true;
+      } else {
+        // Clear old refresh data if it's from a different day
+        localStorage.removeItem(REFRESH_USED_KEY);
+        localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+        return false;
+      }
+    }
+
+    return false;
+  };
+
+  // Helper function to mark refresh as used
+  const markRefreshAsUsed = () => {
+    localStorage.setItem(REFRESH_USED_KEY, "true");
+    localStorage.setItem(REFRESH_USED_TIMESTAMP_KEY, Date.now().toString());
+  };
+
+  // Helper function to check if recommendations were already loaded
+  const checkIfRecommendationsLoaded = () => {
+    const loaded = localStorage.getItem(RECOMMENDATIONS_LOADED_KEY);
+    const savedData = localStorage.getItem(RECOMMENDATIONS_DATA_KEY);
+    const timestamp = localStorage.getItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+
+    // Check if data exists and is from today
+    if (loaded === "true" && savedData && timestamp) {
+      const savedDate = new Date(parseInt(timestamp));
+      const today = new Date();
+
+      // Check if it's the same day
+      if (savedDate.toDateString() === today.toDateString()) {
+        try {
+          const videos = JSON.parse(savedData);
+          return { loaded: true, videos };
+        } catch (e) {
+          console.error("Error parsing saved recommendations:", e);
+          localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+          localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+          localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+        }
+      } else {
+        // Clear old data if it's from a different day
+        localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+        localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+        localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+        localStorage.removeItem(REFRESH_USED_KEY);
+        localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+      }
+    }
+
+    return { loaded: false, videos: null };
+  };
+
+  // Save recommendations to localStorage
+  const saveRecommendationsToStorage = (videos: TrendingVideo[]) => {
+    localStorage.setItem(RECOMMENDATIONS_LOADED_KEY, "true");
+    localStorage.setItem(RECOMMENDATIONS_DATA_KEY, JSON.stringify(videos));
+    localStorage.setItem(RECOMMENDATIONS_TIMESTAMP_KEY, Date.now().toString());
+  };
+
+  // Clear recommendations from localStorage (useful when preferences change)
+  const clearRecommendationsFromStorage = () => {
+    localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+    localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+    localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+    localStorage.removeItem(REFRESH_USED_KEY);
+    localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+  };
+
   // Fetch history videos with simulated streaming
-  const fetchHistoryVideos = async () => {
+  const fetchHistoryVideos = useCallback(async () => {
     try {
       setIsLoadingHistory(true);
       setHistoryVideos([]);
@@ -93,12 +206,24 @@ export default function Dashboard() {
       });
 
       if (response.data?.data?.[0]?.videos) {
-        const videos = response.data.data[0].videos;
+        const videos = response.data.data[1].videos;
+        const uniqueVideos = new Map();
 
+        // Ensure unique videos by using a Map
         for (let i = 0; i < videos.length; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
           const video = convertToTrendingVideo(videos[i]);
-          setHistoryVideos((prev) => [...prev, video]);
+          // Use video URL or ID as the key to ensure uniqueness
+          const key = video.url || video.id || `video-${i}`;
+          if (!uniqueVideos.has(key)) {
+            uniqueVideos.set(key, video);
+          }
+        }
+
+        // Convert Map back to array and stream them
+        const uniqueVideoArray = Array.from(uniqueVideos.values());
+        for (let i = 0; i < uniqueVideoArray.length; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          setHistoryVideos((prev) => [...prev, uniqueVideoArray[i]]);
           setHistoryStreamIndex(i + 1);
         }
       }
@@ -107,7 +232,7 @@ export default function Dashboard() {
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, []); // Remove dependencies to prevent re-creation
 
   // Process streaming response
   const processStreamingResponse = useCallback(
@@ -207,7 +332,16 @@ export default function Dashboard() {
 
         await processStreamingResponse(response, (videos) => {
           setTrendingVideos(videos);
+          setHasLoadedRecommendations(true);
+
+          // Always save to localStorage after successful load
+          saveRecommendationsToStorage(videos);
         });
+
+        // If it's a refresh, also refresh history after recommendations complete
+        if (isRefresh) {
+          await fetchHistoryVideos();
+        }
       } catch (error) {
         console.error("Error streaming videos:", error);
         setIsStreamingVideos(false);
@@ -223,28 +357,48 @@ export default function Dashboard() {
         }
       }
     },
-    [processStreamingResponse]
+    [processStreamingResponse, fetchHistoryVideos, trendingVideos]
   );
 
   // Check user preferences and load trending videos
   useEffect(() => {
+    let mounted = true; // Add mounted flag to prevent state updates on unmounted component
+
     // Check for existing processing state
     const savedState = getProcessingState();
     if (savedState && savedState.isProcessing) {
       setProcessingState(savedState);
     }
 
-    const checkPreferencesAndLoadVideos = async () => {
+    const initializeDashboard = async () => {
       try {
         setLoadingPreferences(true);
 
+        // Check preferences
         const preferencesResponse = await axios.get("/api/preferences", {
           withCredentials: true,
         });
 
+        if (!mounted) return; // Check if component is still mounted
+
         const userHasPreferences =
           preferencesResponse.data?.hasPreference === true;
         setHasPreferences(userHasPreferences);
+
+        // Check if user has changed
+        const currentUserId =
+          preferencesResponse.data?.userId ||
+          preferencesResponse.data?.email ||
+          "anonymous";
+        const savedUserId = localStorage.getItem(USER_ID_KEY);
+
+        if (savedUserId && savedUserId !== currentUserId) {
+          // Different user detected, clear all data
+          clearAllUserData();
+        }
+
+        // Save current user ID
+        localStorage.setItem(USER_ID_KEY, currentUserId);
 
         if (userHasPreferences && preferencesResponse.data?.preference) {
           const { contentPreference, languagePreference } =
@@ -253,24 +407,82 @@ export default function Dashboard() {
 
           if (contentPreference && languagePreference) {
             setLoadingPreferences(false);
-            await loadRecommendations({
-              contentPreference,
-              languagePreference,
-            });
-            return;
+
+            // Check if recommendations were already loaded
+            const { loaded, videos } = checkIfRecommendationsLoaded();
+
+            // Check if refresh was already used today
+            const refreshUsedToday = checkIfRefreshUsedToday();
+            setCanRefreshRecommendations(!refreshUsedToday);
+            if (refreshUsedToday) {
+              setRefreshLimitMessage(
+                "You've already refreshed today. Come back tomorrow for a new refresh!"
+              );
+            }
+
+            if (loaded && videos && videos.length > 0) {
+              // Use cached recommendations - display them immediately
+              setTrendingVideos(videos);
+              setHasLoadedRecommendations(true);
+              setShowVideos(true);
+              setStreamedVideos(videos); // Also set streamed videos to show immediately
+            } else {
+              // Load recommendations for the first time
+              loadRecommendations({
+                contentPreference,
+                languagePreference,
+              });
+            }
           }
         }
       } catch (error) {
         console.error("Error checking preferences:", error);
-        setHasPreferences(false);
+        if (mounted) {
+          setHasPreferences(false);
+        }
       } finally {
-        setLoadingPreferences(false);
+        if (mounted) {
+          setLoadingPreferences(false);
+        }
+      }
+
+      // Fetch history videos separately (not dependent on preferences)
+      if (mounted) {
+        fetchHistoryVideos();
       }
     };
 
-    checkPreferencesAndLoadVideos();
-    fetchHistoryVideos();
+    initializeDashboard();
+
+    // Cleanup function
+    return () => {
+      mounted = false;
+    };
   }, []); // Empty dependency array - only run once on mount
+
+  // Add effect to clear recommendations when preferences change
+  useEffect(() => {
+    // Listen for preference changes (you might emit this from PreferenceSetup component)
+    const handlePreferenceChange = () => {
+      clearRecommendationsFromStorage();
+      setHasLoadedRecommendations(false);
+    };
+
+    // Listen for logout events
+    const handleLogout = () => {
+      clearAllUserData();
+      // Optionally redirect to login page
+      // router.push('/login');
+    };
+
+    window.addEventListener("preferenceChanged", handlePreferenceChange);
+    window.addEventListener("userLogout", handleLogout);
+
+    return () => {
+      window.removeEventListener("preferenceChanged", handlePreferenceChange);
+      window.removeEventListener("userLogout", handleLogout);
+    };
+  }, []);
 
   const handleSubmitUrl = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -469,14 +681,24 @@ export default function Dashboard() {
     // Don't clear processing state when closing, just hide the modal
   };
 
-  const handleRefreshRecommendations = () => {
+  const handleRefreshRecommendations = async () => {
     if (
       !hasPreferences ||
       !userPreferences.contentPreference ||
-      !userPreferences.languagePreference
+      !userPreferences.languagePreference ||
+      !canRefreshRecommendations
     )
       return;
-    loadRecommendations(userPreferences, true);
+
+    // Mark refresh as used
+    markRefreshAsUsed();
+    setCanRefreshRecommendations(false);
+    setRefreshLimitMessage(
+      "You've already refreshed today. Come back tomorrow for a new refresh!"
+    );
+
+    // Load new recommendations - this will automatically save to localStorage
+    await loadRecommendations(userPreferences, true);
   };
 
   const handleVideoClick = (video: TrendingVideo) => {
@@ -484,7 +706,12 @@ export default function Dashboard() {
     setShowOptionsModal(true);
   };
 
-  const displayVideos = showVideos ? streamedVideos : trendingVideos;
+  const displayVideos =
+    showVideos || hasLoadedRecommendations
+      ? streamedVideos.length > 0
+        ? streamedVideos
+        : trendingVideos
+      : trendingVideos;
 
   return (
     <>
@@ -554,15 +781,6 @@ export default function Dashboard() {
             transition={{ delay: 0.2 }}
             className="mb-12"
           >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="w-6 h-6 text-[#D68CB8]" />
-                <h2 className="text-xl sm:text-2xl font-semibold">
-                  AI-Recommended Trending Videos
-                </h2>
-              </div>
-            </div>
-
             {loadingPreferences ? (
               <div className="flex justify-center items-center h-64">
                 <Loader2 className="w-8 h-8 animate-spin text-[#D68CB8]" />
@@ -587,9 +805,16 @@ export default function Dashboard() {
                   isStreaming={isStreamingVideos}
                   streamingMessage={streamingMessage}
                   showStreamingOverlay={showVideos}
-                  showRefreshButton={hasPreferences || false}
+                  showRefreshButton={
+                    hasPreferences && canRefreshRecommendations
+                  }
                   onRefresh={handleRefreshRecommendations}
                   isRefreshing={isRefreshing}
+                  title="AI-Recommended Trending Videos"
+                  icon={TrendingUp}
+                  refreshDisabledMessage={refreshLimitMessage}
+                  isLoading={isStreamingVideos && !showVideos}
+                  skeletonCount={6}
                 />
               )
             ) : hasPreferences === false ? (
@@ -605,11 +830,16 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            {isLoadingHistory && historyVideos.length === 0 ? (
+            {(isLoadingHistory && historyVideos.length === 0) ||
+            (isRefreshing && isLoadingHistory) ? (
               <div className="flex justify-center items-center h-64">
                 <div className="text-center">
                   <Loader2 className="w-8 h-8 animate-spin text-[#D68CB8] mx-auto mb-4" />
-                  <p className="text-gray-400">Loading your history...</p>
+                  <p className="text-gray-400">
+                    {isRefreshing
+                      ? "Updating your history..."
+                      : "Loading your history..."}
+                  </p>
                 </div>
               </div>
             ) : historyVideos.length === 0 ? (
@@ -626,6 +856,10 @@ export default function Dashboard() {
                 onScroll={(direction) =>
                   scrollSlider(historySliderRef, direction)
                 }
+                title="Your Video History"
+                icon={History}
+                isLoading={isLoadingHistory && historyVideos.length === 0}
+                skeletonCount={4}
               />
             )}
           </motion.div>

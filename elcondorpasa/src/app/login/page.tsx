@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import axios, { AxiosError } from "axios";
@@ -10,15 +10,22 @@ import {
   Lock,
   AlertCircle,
   CheckCircle,
-  Sparkles,
+  LogIn,
 } from "lucide-react";
 import { GoogleResponse, LoginResponse } from "@/types";
+import CursorGlow from "@/components/CursorGlow";
+import ParticleBackground from "@/components/yourclip/ParticleBackground";
+import Link from "next/link";
 
 declare global {
   interface Window {
     google: any;
   }
 }
+
+// Constants
+const GOOGLE_SCRIPT_URL = "https://accounts.google.com/gsi/client";
+const REDIRECT_DELAY = 1500;
 
 // Animation variants
 const fadeInVariants = {
@@ -36,76 +43,66 @@ const scaleVariants = {
   tap: { scale: 0.95 },
 };
 
-// Reusable components
-const FadeInView: React.FC<{
-  children: React.ReactNode;
-  delay?: number;
-  className?: string;
-}> = ({ children, delay = 0, className = "" }) => (
-  <motion.div
-    variants={fadeInVariants}
-    initial="hidden"
-    animate="visible"
-    custom={delay}
-    className={className}
-  >
-    {children}
-  </motion.div>
-);
+const slideInVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: (delay: number) => ({
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.5, delay },
+  }),
+};
 
-const ScaleButton: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-  type?: "button" | "submit";
-  disabled?: boolean;
-  onClick?: () => void;
-}> = ({ children, className = "", type = "button", disabled, onClick }) => (
-  <motion.button
-    variants={scaleVariants}
-    initial="idle"
-    whileHover={disabled ? "idle" : "hover"}
-    whileTap={disabled ? "idle" : "tap"}
-    className={className}
-    type={type}
-    disabled={disabled}
-    onClick={onClick}
-  >
-    {children}
-  </motion.button>
-);
-
+// Shared components
 const MessageAlert: React.FC<{
   type: "error" | "success";
   message: string;
 }> = ({ type, message }) => {
-  const config = {
-    error: {
-      bg: "bg-red-500/10",
-      border: "border-red-500/30",
-      text: "text-red-400",
-      Icon: AlertCircle,
-    },
-    success: {
-      bg: "bg-green-500/10",
-      border: "border-green-500/30",
-      text: "text-green-400",
-      Icon: CheckCircle,
-    },
-  };
+  const config = useMemo(
+    () => ({
+      error: {
+        backgroundColor: "rgba(239, 68, 68, 0.1)",
+        borderColor: "rgba(239, 68, 68, 0.3)",
+        textColor: "#fca5a5",
+        Icon: AlertCircle,
+      },
+      success: {
+        backgroundColor: "rgba(34, 197, 94, 0.1)",
+        borderColor: "rgba(34, 197, 94, 0.3)",
+        textColor: "#86efac",
+        Icon: CheckCircle,
+      },
+    }),
+    []
+  );
 
-  const { bg, border, text, Icon } = config[type];
+  const { backgroundColor, borderColor, textColor, Icon } = config[type];
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`${bg} ${border} ${text} px-4 py-3 rounded-xl backdrop-blur-sm flex items-center gap-2`}
+      className="px-4 py-3 rounded-xl flex items-center gap-2"
+      style={{
+        backgroundColor,
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        border: `1px solid ${borderColor}`,
+        color: textColor,
+      }}
     >
       <Icon className="w-4 h-4 flex-shrink-0" />
       {message}
     </motion.div>
   );
 };
+
+const LoadingSpinner = () => (
+  <motion.div
+    animate={{ rotate: 360 }}
+    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+  />
+);
 
 const FormInput: React.FC<{
   id: string;
@@ -119,18 +116,19 @@ const FormInput: React.FC<{
   delay: number;
 }> = ({ id, name, type, value, onChange, placeholder, label, Icon, delay }) => (
   <motion.div
-    initial={{ opacity: 0, x: -20 }}
-    animate={{ opacity: 1, x: 0 }}
-    transition={{ duration: 0.5, delay }}
+    variants={slideInVariants}
+    initial="hidden"
+    animate="visible"
+    custom={delay}
   >
     <label
       htmlFor={id}
-      className="block text-sm font-medium text-gray-300 mb-2"
+      className="block text-sm font-medium text-gray-200 mb-2"
     >
       {label}
     </label>
     <div className="relative">
-      <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
+      <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
       <input
         id={id}
         name={name}
@@ -138,40 +136,25 @@ const FormInput: React.FC<{
         required
         value={value}
         onChange={onChange}
-        className="w-full pl-10 pr-3 py-3 bg-white/10 border border-white/20 text-white placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#D68CB8] focus:border-transparent transition-all duration-300"
+        className="w-full pl-10 pr-3 py-3 text-white placeholder-gray-400 rounded-xl focus:outline-none transition-all duration-300"
+        style={{
+          backgroundColor: "rgba(255, 255, 255, 0.05)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+        }}
         placeholder={placeholder}
+        onFocus={(e) => {
+          e.target.style.border = "1px solid rgba(214, 140, 184, 0.5)";
+          e.target.style.boxShadow = "0 0 20px rgba(214, 140, 184, 0.2)";
+        }}
+        onBlur={(e) => {
+          e.target.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+          e.target.style.boxShadow = "none";
+        }}
       />
     </div>
   </motion.div>
-);
-
-const AnimatedBackground = () => (
-  <>
-    <motion.div
-      animate={{
-        scale: [1, 1.2, 1],
-        rotate: [0, 180, 360],
-      }}
-      transition={{
-        duration: 20,
-        repeat: Infinity,
-        ease: "linear",
-      }}
-      className="absolute top-20 left-10 w-64 h-64 bg-[#D68CB8]/10 rounded-full blur-3xl"
-    />
-    <motion.div
-      animate={{
-        scale: [1.2, 1, 1.2],
-        rotate: [360, 180, 0],
-      }}
-      transition={{
-        duration: 25,
-        repeat: Infinity,
-        ease: "linear",
-      }}
-      className="absolute bottom-20 right-10 w-96 h-96 bg-[#D68CB8]/5 rounded-full blur-3xl"
-    />
-  </>
 );
 
 const GoogleButton: React.FC<{
@@ -182,7 +165,13 @@ const GoogleButton: React.FC<{
   return (
     <>
       {!isLoaded && (
-        <div className="bg-white/10 animate-pulse h-12 w-full rounded-xl flex items-center justify-center">
+        <div
+          className="animate-pulse h-12 w-full rounded-xl flex items-center justify-center"
+          style={{
+            backgroundColor: "rgba(255, 255, 255, 0.05)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+          }}
+        >
           <span className="text-sm text-gray-400">
             Loading Google Sign-In...
           </span>
@@ -199,10 +188,14 @@ const GoogleButton: React.FC<{
 
       {/* Fallback Google button if the official one doesn't render */}
       {isLoaded && !document.querySelector("#google-signin-button iframe") && (
-        <ScaleButton
+        <motion.button
+          variants={scaleVariants}
+          initial="idle"
+          whileHover={isLoading ? "idle" : "hover"}
+          whileTap={isLoading ? "idle" : "tap"}
           onClick={onClick}
           disabled={isLoading}
-          className="w-full py-3 px-4 bg-white text-gray-800 font-medium rounded-xl hover:bg-gray-100 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+          className="w-full py-3 px-4 bg-white text-gray-800 font-medium rounded-xl hover:bg-gray-100 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-lg"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -223,7 +216,7 @@ const GoogleButton: React.FC<{
             />
           </svg>
           {isLoading ? "Signing in..." : "Continue with Google"}
-        </ScaleButton>
+        </motion.button>
       )}
 
       {isLoading && (
@@ -249,13 +242,15 @@ export default function LoginPage() {
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const router = useRouter();
 
+  const isAnyLoading = isLoading || googleLoading;
+
   const handleAuthResponse = useCallback(
     (data: LoginResponse, source: "google" | "regular") => {
       const userName = data.user?.name || data.user?.email;
       setSuccess(
-        source === "google" ? `Welcome ${userName}!` : "Login successful!"
+        source === "google" ? `Welcome back ${userName}!` : "Login successful!"
       );
-      setTimeout(() => router.push("/dashboard"), 1500);
+      setTimeout(() => router.push("/dashboard"), REDIRECT_DELAY);
     },
     [router]
   );
@@ -295,7 +290,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
+    script.src = GOOGLE_SCRIPT_URL;
     script.async = true;
     document.body.appendChild(script);
 
@@ -371,45 +366,65 @@ export default function LoginPage() {
     [formData, handleAuthResponse, handleAuthError]
   );
 
-  const isAnyLoading = isLoading || googleLoading;
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#1D1D1D] py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      <AnimatedBackground />
+    <div className="min-h-screen relative bg-gradient-to-b from-[#1D1D1D] to-black overflow-hidden">
+      {/* Background Effects */}
+      <ParticleBackground />
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-        className="max-w-md w-full space-y-8 relative z-10"
-      >
-        {/* Header */}
-        <FadeInView>
-          <div className="text-center">
+      {/* Cursor Glow Effect */}
+      <CursorGlow />
+
+      <div className="relative z-10 min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-md w-full space-y-8"
+        >
+          {/* Header */}
+          <motion.div
+            variants={fadeInVariants}
+            initial="hidden"
+            animate="visible"
+            className="text-center"
+          >
             <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="inline-flex items-center justify-center w-16 h-16 bg-[#D68CB8]/20 rounded-full mb-4"
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ duration: 0.8, delay: 0.2, type: "spring" }}
+              className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full mb-6 shadow-2xl"
+              style={{
+                boxShadow: "0 20px 40px rgba(236, 72, 153, 0.3)",
+              }}
             >
-              <Sparkles className="w-8 h-8 text-[#D68CB8]" />
+              <LogIn className="w-10 h-10 text-white" />
             </motion.div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-white">
+            <h2 className="text-4xl sm:text-5xl font-bold text-white">
               Welcome back
             </h2>
-            <p className="mt-2 text-sm sm:text-base text-gray-400">
+            <p className="mt-3 text-base sm:text-lg text-gray-300">
               Sign in to continue creating amazing shorts
             </p>
-          </div>
-        </FadeInView>
+          </motion.div>
 
-        {/* Messages */}
-        {error && <MessageAlert type="error" message={error} />}
-        {success && <MessageAlert type="success" message={success} />}
+          {/* Messages */}
+          {error && <MessageAlert type="error" message={error} />}
+          {success && <MessageAlert type="success" message={success} />}
 
-        <FadeInView delay={0.1}>
-          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 sm:p-8 border border-white/10">
-            {/* Regular Login Form */}
+          <motion.div
+            variants={fadeInVariants}
+            initial="hidden"
+            animate="visible"
+            custom={0.1}
+            className="rounded-3xl p-8 sm:p-10 shadow-2xl"
+            style={{
+              backgroundColor: "rgba(31, 31, 31, 0.3)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            {/* Form */}
             <form className="space-y-6" onSubmit={handleRegularLogin}>
               <FormInput
                 id="emailUsername"
@@ -432,30 +447,39 @@ export default function LoginPage() {
                 placeholder="Enter your password"
                 label="Password"
                 Icon={Lock}
-                delay={0.3}
+                delay={0.25}
               />
 
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
               >
-                <ScaleButton
+                <motion.button
+                  variants={scaleVariants}
+                  initial="idle"
+                  whileHover={isAnyLoading ? "idle" : "hover"}
+                  whileTap={isAnyLoading ? "idle" : "tap"}
                   type="submit"
                   disabled={isAnyLoading}
-                  className="group w-full py-3 px-4 bg-gradient-to-r from-[#D68CB8] to-pink-400 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-pink-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="group w-full py-4 px-6 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-xl shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{
+                    boxShadow: "0 10px 30px rgba(236, 72, 153, 0.3)",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isAnyLoading) {
+                      e.currentTarget.style.boxShadow =
+                        "0 15px 40px rgba(236, 72, 153, 0.4)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow =
+                      "0 10px 30px rgba(236, 72, 153, 0.3)";
+                  }}
                 >
                   {isLoading ? (
                     <>
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{
-                          duration: 1,
-                          repeat: Infinity,
-                          ease: "linear",
-                        }}
-                        className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
-                      />
+                      <LoadingSpinner />
                       Signing in...
                     </>
                   ) : (
@@ -464,17 +488,30 @@ export default function LoginPage() {
                       <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </>
                   )}
-                </ScaleButton>
+                </motion.button>
               </motion.div>
             </form>
 
             {/* Divider */}
             <div className="relative my-8">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10" />
+                <div
+                  className="w-full h-px"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent)",
+                  }}
+                />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white/5 text-gray-400 backdrop-blur-sm rounded-full">
+                <span
+                  className="px-4 text-gray-400 rounded-full"
+                  style={{
+                    backgroundColor: "rgba(31, 31, 31, 0.3)",
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                  }}
+                >
                   Or continue with
                 </span>
               </div>
@@ -484,7 +521,7 @@ export default function LoginPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
               className="space-y-4"
             >
               <GoogleButton
@@ -498,32 +535,35 @@ export default function LoginPage() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.6 }}
-              className="flex items-center justify-between text-sm mt-6"
+              transition={{ duration: 0.5, delay: 0.5 }}
+              className="flex items-center justify-center text-sm mt-8 text-center"
             >
-              <a
-                href="#"
-                className="text-[#D68CB8] hover:text-pink-300 transition-colors duration-300"
-              >
-                Forgot password?
-              </a>
-              <a
-                href="/register"
-                className="text-[#D68CB8] hover:text-pink-300 transition-colors duration-300"
-              >
-                Create account
-              </a>
+              <span className="text-gray-300">
+                Don't have an account?{" "}
+                <Link
+                  href="/register"
+                  className="text-pink-400 hover:text-pink-300 font-medium transition-colors duration-300"
+                >
+                  Sign up
+                </Link>
+              </span>
             </motion.div>
-          </div>
-        </FadeInView>
+          </motion.div>
 
-        {/* Development Info */}
-        {process.env.NODE_ENV === "development" && (
-          <FadeInView delay={0.7}>
+          {/* Development Info */}
+          {process.env.NODE_ENV === "development" && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl backdrop-blur-sm"
+              variants={fadeInVariants}
+              initial="hidden"
+              animate="visible"
+              custom={0.6}
+              className="p-4 rounded-xl opacity-50"
+              style={{
+                backgroundColor: "rgba(59, 130, 246, 0.1)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                border: "1px solid rgba(59, 130, 246, 0.3)",
+              }}
             >
               <h3 className="text-sm font-medium text-blue-400 mb-2">
                 Development Mode
@@ -538,9 +578,9 @@ export default function LoginPage() {
                 </p>
               )}
             </motion.div>
-          </FadeInView>
-        )}
-      </motion.div>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 }

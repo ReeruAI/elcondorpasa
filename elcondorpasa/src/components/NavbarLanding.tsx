@@ -7,9 +7,13 @@ import {
   User,
   LogOut,
   LayoutDashboard,
-  ChevronDown,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import axios from "axios";
 
 export default function NavbarLanding() {
   const [isVisible, setIsVisible] = useState(true);
@@ -130,8 +134,16 @@ export default function NavbarLanding() {
     setIsMobileMenuOpen(false);
   };
 
-  const handleGetStarted = () => {
+  const handleRegister = () => {
     router.push("/register");
+    setIsDropdownOpen(false);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleLogin = () => {
+    router.push("/login");
+    setIsDropdownOpen(false);
+    setIsMobileMenuOpen(false);
   };
 
   const handleDashboard = () => {
@@ -142,10 +154,13 @@ export default function NavbarLanding() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      await axios.post(
+        "/api/logout",
+        {},
+        {
+          withCredentials: true,
+        }
+      );
 
       setIsLoggedIn(false);
       setIsDropdownOpen(false);
@@ -166,101 +181,140 @@ export default function NavbarLanding() {
 
   return (
     <>
-      <nav
-        className={`fixed w-full backdrop-blur-md transition-transform duration-300 z-50 ${
-          isVisible ? "translate-y-0" : "-translate-y-full"
-        }`}
-        style={{ backgroundColor: "rgba(29,29,29,0.95)" }}
+      <motion.nav
+        initial={false}
+        animate={{
+          transform: isVisible ? "translateY(0%)" : "translateY(-100%)",
+        }}
+        transition={{
+          duration: 0.3,
+          ease: "easeInOut",
+        }}
+        className="fixed w-full z-50"
+        style={{
+          backgroundColor: "rgba(29, 29, 29, 0.1)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+          boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
+        }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-20 md:h-24">
             {/* Logo */}
             <div className="flex items-center">
-              <a
+              <Link
                 href="#home"
                 onClick={(e) => handleNavClick(e, "#home")}
                 className="flex items-center space-x-2"
               >
                 <motion.div
-                  whileHover={{ scale: 1.1, rotate: 180 }}
+                  whileHover={{ scale: 1.2 }}
                   transition={{ duration: 0.3 }}
                   className="text-[#D68CB8]"
                 >
-                  <Sparkles className="w-8 h-8 md:w-10 md:h-10" />
+                  <Image
+                    src="/logo.svg"
+                    alt="Reeru AI Logo"
+                    width={100}
+                    height={100}
+                    priority
+                    className="w-15 h-15 md:w-15 md:h-15 lg:w-20 lg:h-20"
+                  />
                 </motion.div>
-                <span className="font-bold text-xl md:text-2xl text-white">
-                  Reeru AI
+                <span className="font-bold text-xl md:text-2xl bg-gradient-to-r from-[#ec4899] to-[#a855f3] bg-clip-text text-transparent">
+                  ReeruAI
                 </span>
-              </a>
+              </Link>
             </div>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-8">
               {navLinks.map((link) => (
-                <a
+                <Link
                   key={link.href}
                   href={link.href}
                   onClick={(e) => handleNavClick(e, link.href)}
-                  className="px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:border-b-2 hover:border-[#D68CB8] transition-all duration-200"
+                  className="px-4 py-2 text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
                 >
                   {link.label}
-                </a>
+                </Link>
               ))}
 
-              {isLoggedIn ? (
-                <div className="relative" ref={dropdownRef}>
-                  <button
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-pink-300 to-pink-400 hover:shadow-lg hover:shadow-pink-500/30 transition-all duration-200"
-                  >
-                    <User className="w-5 h-5 text-gray-900" />
-                  </button>
+              {/* User Dropdown - Always show user icon */}
+              <div className="relative" ref={dropdownRef}>
+                <motion.button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-r from-[#ec4899] to-[#a855f3] hover:shadow-lg hover:shadow-pink-500/30 transition-all duration-200"
+                >
+                  <User className="w-5 h-5 text-white" />
+                </motion.button>
 
-                  <AnimatePresence>
-                    {isDropdownOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white border border-gray-200"
-                      >
-                        <div className="py-1">
+                <AnimatePresence>
+                  {isDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg"
+                      style={{
+                        backgroundColor: "rgba(31, 31, 31, 0.7)",
+                        backdropFilter: "blur(20px)",
+                        WebkitBackdropFilter: "blur(20px)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                      }}
+                    >
+                      {isLoggedIn ? (
+                        <>
                           <button
                             onClick={handleDashboard}
-                            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            className="flex items-center w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors rounded-t-lg"
                           >
-                            <LayoutDashboard className="w-4 h-4 mr-3 text-gray-500" />
+                            <LayoutDashboard className="w-4 h-4 mr-3" />
                             Dashboard
                           </button>
-                          <div className="border-t border-gray-100"></div>
+                          <div className="border-t border-white/10"></div>
                           <button
                             onClick={handleLogout}
-                            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            className="flex items-center w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors rounded-b-lg"
                           >
-                            <LogOut className="w-4 h-4 mr-3 text-gray-500" />
+                            <LogOut className="w-4 h-4 mr-3" />
                             Logout
                           </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <ScaleButton
-                  onClick={handleGetStarted}
-                  className="px-6 py-2.5 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full font-semibold text-sm hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300"
-                >
-                  Get Started
-                </ScaleButton>
-              )}
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={handleRegister}
+                            className="flex items-center w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors rounded-t-lg"
+                          >
+                            <UserPlus className="w-4 h-4 mr-3" />
+                            Register
+                          </button>
+                          <div className="border-t border-white/10"></div>
+                          <button
+                            onClick={handleLogin}
+                            className="flex items-center w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors rounded-b-lg"
+                          >
+                            <LogIn className="w-4 h-4 mr-3" />
+                            Log In
+                          </button>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
 
             {/* Mobile menu button */}
             <div className="md:hidden flex items-center">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 rounded-md text-gray-300 hover:text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-gray-500"
+                className="p-2 rounded-md text-gray-200 hover:text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/20"
                 aria-label="Toggle menu"
               >
                 {isMobileMenuOpen ? (
@@ -274,65 +328,84 @@ export default function NavbarLanding() {
         </div>
 
         {/* Mobile menu */}
-        <motion.div
-          initial={false}
-          animate={{
-            height: isMobileMenuOpen ? "auto" : 0,
-            opacity: isMobileMenuOpen ? 1 : 0,
-          }}
-          transition={{ duration: 0.3 }}
-          className="md:hidden overflow-hidden"
-        >
-          <div
-            className="px-2 pt-2 pb-3 space-y-1 shadow-lg"
-            style={{ backgroundColor: "rgb(29,29,29)" }}
-          >
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                onClick={(e) => handleNavClick(e, link.href)}
-                className="block px-3 py-3 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors duration-200"
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="md:hidden overflow-hidden"
+            >
+              <div
+                className="px-2 pt-2 pb-3 space-y-1 shadow-lg"
+                style={{
+                  backgroundColor: "rgba(29, 29, 29, 0.1)",
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)",
+                  borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+                }}
               >
-                {link.label}
-              </a>
-            ))}
-            <div className="pt-2">
-              {isLoggedIn ? (
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 px-3 py-2 text-white">
-                    <div className="w-8 h-8 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full flex items-center justify-center">
-                      <User className="w-5 h-5 text-gray-900" />
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={(e) => handleNavClick(e, link.href)}
+                    className="block px-3 py-3 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 transition-all duration-200"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+                <div className="pt-2 border-t border-white/10">
+                  {isLoggedIn ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-3 px-3 py-2">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-r from-[#ec4899] to-[#a855f3] flex items-center justify-center">
+                          <User className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="font-medium text-gray-200">
+                          Hello, User!
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleDashboard}
+                        className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                      >
+                        <LayoutDashboard className="w-4 h-4 mr-3" />
+                        Dashboard
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4 mr-3" />
+                        Logout
+                      </button>
                     </div>
-                    <span className="font-medium">Hello, User!</span>
-                  </div>
-                  <button
-                    onClick={handleDashboard}
-                    className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
-                  >
-                    <LayoutDashboard className="w-4 h-4 mr-3" />
-                    Dashboard
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
-                  >
-                    <LogOut className="w-4 h-4 mr-3" />
-                    Logout
-                  </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <button
+                        onClick={handleRegister}
+                        className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                      >
+                        <UserPlus className="w-4 h-4 mr-3" />
+                        Register
+                      </button>
+                      <button
+                        onClick={handleLogin}
+                        className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-white/10 transition-colors"
+                      >
+                        <LogIn className="w-4 h-4 mr-3" />
+                        Log In
+                      </button>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <ScaleButton
-                  onClick={handleGetStarted}
-                  className="w-full px-6 py-2.5 bg-gradient-to-r from-pink-300 to-pink-400 rounded-full font-semibold text-sm hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300"
-                >
-                  Get Started
-                </ScaleButton>
-              )}
-            </div>
-          </div>
-        </motion.div>
-      </nav>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.nav>
     </>
   );
 }
