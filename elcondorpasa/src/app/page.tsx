@@ -269,7 +269,7 @@ const FINAL_STATS: Stat[] = [
 
 // Video Preview Component
 interface VideoPreviewProps {
-  title: string;
+  title?: string;
   aspectRatio?: string;
   duration?: string;
 }
@@ -289,24 +289,18 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
       WebkitBackdropFilter: "blur(10px)",
     }}
   >
-    <img
-      src="https://placehold.co/600x400"
-      alt={title}
+    <video
+      src="/demo-shorts.mp4"
+      autoPlay
+      loop
+      muted
+      playsInline
       className="w-full h-full object-cover opacity-80"
-    />
-    <motion.div
-      whileHover={{ scale: 1.1 }}
-      className="absolute inset-0 flex items-center justify-center"
     >
-      <div
-        className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center shadow-2xl"
-        style={{
-          boxShadow: "0 20px 40px rgba(236, 72, 153, 0.3)",
-        }}
-      >
-        <Play className="h-6 w-6 sm:h-8 sm:w-8 text-white ml-1" />
-      </div>
-    </motion.div>
+      <source src="/demo-shorts.mp4" type="video/mp4" />
+      Your browser does not support the video tag.
+    </video>
+
     {duration && (
       <div
         className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm text-white"
@@ -540,10 +534,7 @@ export default function Home() {
                   <h3 className="text-xl sm:text-2xl font-bold mb-4 text-center text-white">
                     Before
                   </h3>
-                  <VideoPreview
-                    title="Long form video preview"
-                    duration="45:32"
-                  />
+                  <VideoPreview />
                 </motion.div>
 
                 <motion.div
