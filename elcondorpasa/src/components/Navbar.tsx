@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, Sparkles, X, User, LogOut, Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { clearUserRecommendationData } from "@/app/(withNavbar)/dashboard/page";
 
 // Token context for global state management
 import { createContext, useContext } from "react";
@@ -232,6 +233,13 @@ export default function Navbar() {
 
   const handleLogout = useCallback(async () => {
     try {
+      // Clear user-specific recommendation data
+      clearUserRecommendationData();
+
+      // Dispatch logout event for any components listening
+      window.dispatchEvent(new Event("userLogout"));
+
+      // Call logout API
       await fetch("/api/logout", {
         method: "POST",
         credentials: "include",

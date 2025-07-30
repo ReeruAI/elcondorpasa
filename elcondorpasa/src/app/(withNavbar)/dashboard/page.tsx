@@ -39,6 +39,24 @@ import {
   processKlapStream,
 } from "@/utils/klap";
 
+// Constants for localStorage keys
+const RECOMMENDATIONS_LOADED_KEY = "yourclip_recommendations_loaded";
+const RECOMMENDATIONS_DATA_KEY = "yourclip_recommendations_data";
+const RECOMMENDATIONS_TIMESTAMP_KEY = "yourclip_recommendations_timestamp";
+const REFRESH_USED_KEY = "yourclip_refresh_used";
+const REFRESH_USED_TIMESTAMP_KEY = "yourclip_refresh_timestamp";
+const USER_ID_KEY = "yourclip_current_user";
+
+// Export function to clear user data (can be called from logout)
+export const clearUserRecommendationData = () => {
+  localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+  localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+  localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+  localStorage.removeItem(REFRESH_USED_KEY);
+  localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+  localStorage.removeItem(USER_ID_KEY);
+};
+
 export default function Dashboard() {
   // State management
   const [url, setUrl] = useState("");
@@ -63,6 +81,8 @@ export default function Dashboard() {
   const [canRefreshRecommendations, setCanRefreshRecommendations] =
     useState(true);
   const [refreshLimitMessage, setRefreshLimitMessage] = useState("");
+  const [hasLoadedRecommendations, setHasLoadedRecommendations] =
+    useState(false);
 
   // Klap processing states
   const [processingState, setProcessingState] = useState<ProcessingState>({
@@ -84,6 +104,96 @@ export default function Dashboard() {
     null
   ) as React.RefObject<HTMLDivElement>;
 
+  // Clear all user-specific data from localStorage
+  const clearAllUserData = () => {
+    localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+    localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+    localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+    localStorage.removeItem(REFRESH_USED_KEY);
+    localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+    localStorage.removeItem(USER_ID_KEY);
+  };
+
+  // Helper function to check if refresh was already used today
+  const checkIfRefreshUsedToday = () => {
+    const refreshUsed = localStorage.getItem(REFRESH_USED_KEY);
+    const refreshTimestamp = localStorage.getItem(REFRESH_USED_TIMESTAMP_KEY);
+
+    if (refreshUsed === "true" && refreshTimestamp) {
+      const refreshDate = new Date(parseInt(refreshTimestamp));
+      const today = new Date();
+
+      // Check if it's the same day
+      if (refreshDate.toDateString() === today.toDateString()) {
+        return true;
+      } else {
+        // Clear old refresh data if it's from a different day
+        localStorage.removeItem(REFRESH_USED_KEY);
+        localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+        return false;
+      }
+    }
+
+    return false;
+  };
+
+  // Helper function to mark refresh as used
+  const markRefreshAsUsed = () => {
+    localStorage.setItem(REFRESH_USED_KEY, "true");
+    localStorage.setItem(REFRESH_USED_TIMESTAMP_KEY, Date.now().toString());
+  };
+
+  // Helper function to check if recommendations were already loaded
+  const checkIfRecommendationsLoaded = () => {
+    const loaded = localStorage.getItem(RECOMMENDATIONS_LOADED_KEY);
+    const savedData = localStorage.getItem(RECOMMENDATIONS_DATA_KEY);
+    const timestamp = localStorage.getItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+
+    // Check if data exists and is from today
+    if (loaded === "true" && savedData && timestamp) {
+      const savedDate = new Date(parseInt(timestamp));
+      const today = new Date();
+
+      // Check if it's the same day
+      if (savedDate.toDateString() === today.toDateString()) {
+        try {
+          const videos = JSON.parse(savedData);
+          return { loaded: true, videos };
+        } catch (e) {
+          console.error("Error parsing saved recommendations:", e);
+          localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+          localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+          localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+        }
+      } else {
+        // Clear old data if it's from a different day
+        localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+        localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+        localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+        localStorage.removeItem(REFRESH_USED_KEY);
+        localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+      }
+    }
+
+    return { loaded: false, videos: null };
+  };
+
+  // Save recommendations to localStorage
+  const saveRecommendationsToStorage = (videos: TrendingVideo[]) => {
+    localStorage.setItem(RECOMMENDATIONS_LOADED_KEY, "true");
+    localStorage.setItem(RECOMMENDATIONS_DATA_KEY, JSON.stringify(videos));
+    localStorage.setItem(RECOMMENDATIONS_TIMESTAMP_KEY, Date.now().toString());
+  };
+
+  // Clear recommendations from localStorage (useful when preferences change)
+  const clearRecommendationsFromStorage = () => {
+    localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+    localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+    localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+    localStorage.removeItem(REFRESH_USED_KEY);
+    localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+  };
+
   // Fetch history videos with simulated streaming
   const fetchHistoryVideos = useCallback(async () => {
     try {
@@ -96,7 +206,7 @@ export default function Dashboard() {
       });
 
       if (response.data?.data?.[0]?.videos) {
-        const videos = response.data.data[0].videos;
+        const videos = response.data.data[1].videos;
         const uniqueVideos = new Map();
 
         // Ensure unique videos by using a Map
@@ -168,18 +278,6 @@ export default function Dashboard() {
                 const cleanMessage = parseStreamingMessage(parsed.message);
                 if (cleanMessage) {
                   setStreamingMessage(cleanMessage);
-
-                  // Check for the daily limit message
-                  if (
-                    cleanMessage.includes(
-                      "These are your videos for today! Come back tomorrow for fresh content."
-                    )
-                  ) {
-                    setCanRefreshRecommendations(false);
-                    setRefreshLimitMessage(
-                      "You've reached your daily refresh limit. Come back tomorrow for fresh content!"
-                    );
-                  }
                 }
               } else if (parsed.type === "video" && parsed.data) {
                 const newVideo = convertToTrendingVideo(parsed.data);
@@ -234,6 +332,10 @@ export default function Dashboard() {
 
         await processStreamingResponse(response, (videos) => {
           setTrendingVideos(videos);
+          setHasLoadedRecommendations(true);
+
+          // Always save to localStorage after successful load
+          saveRecommendationsToStorage(videos);
         });
 
         // If it's a refresh, also refresh history after recommendations complete
@@ -283,6 +385,21 @@ export default function Dashboard() {
           preferencesResponse.data?.hasPreference === true;
         setHasPreferences(userHasPreferences);
 
+        // Check if user has changed
+        const currentUserId =
+          preferencesResponse.data?.userId ||
+          preferencesResponse.data?.email ||
+          "anonymous";
+        const savedUserId = localStorage.getItem(USER_ID_KEY);
+
+        if (savedUserId && savedUserId !== currentUserId) {
+          // Different user detected, clear all data
+          clearAllUserData();
+        }
+
+        // Save current user ID
+        localStorage.setItem(USER_ID_KEY, currentUserId);
+
         if (userHasPreferences && preferencesResponse.data?.preference) {
           const { contentPreference, languagePreference } =
             preferencesResponse.data.preference;
@@ -290,11 +407,32 @@ export default function Dashboard() {
 
           if (contentPreference && languagePreference) {
             setLoadingPreferences(false);
-            // Load recommendations (without await to not block history)
-            loadRecommendations({
-              contentPreference,
-              languagePreference,
-            });
+
+            // Check if recommendations were already loaded
+            const { loaded, videos } = checkIfRecommendationsLoaded();
+
+            // Check if refresh was already used today
+            const refreshUsedToday = checkIfRefreshUsedToday();
+            setCanRefreshRecommendations(!refreshUsedToday);
+            if (refreshUsedToday) {
+              setRefreshLimitMessage(
+                "You've already refreshed today. Come back tomorrow for a new refresh!"
+              );
+            }
+
+            if (loaded && videos && videos.length > 0) {
+              // Use cached recommendations - display them immediately
+              setTrendingVideos(videos);
+              setHasLoadedRecommendations(true);
+              setShowVideos(true);
+              setStreamedVideos(videos); // Also set streamed videos to show immediately
+            } else {
+              // Load recommendations for the first time
+              loadRecommendations({
+                contentPreference,
+                languagePreference,
+              });
+            }
           }
         }
       } catch (error) {
@@ -321,6 +459,30 @@ export default function Dashboard() {
       mounted = false;
     };
   }, []); // Empty dependency array - only run once on mount
+
+  // Add effect to clear recommendations when preferences change
+  useEffect(() => {
+    // Listen for preference changes (you might emit this from PreferenceSetup component)
+    const handlePreferenceChange = () => {
+      clearRecommendationsFromStorage();
+      setHasLoadedRecommendations(false);
+    };
+
+    // Listen for logout events
+    const handleLogout = () => {
+      clearAllUserData();
+      // Optionally redirect to login page
+      // router.push('/login');
+    };
+
+    window.addEventListener("preferenceChanged", handlePreferenceChange);
+    window.addEventListener("userLogout", handleLogout);
+
+    return () => {
+      window.removeEventListener("preferenceChanged", handlePreferenceChange);
+      window.removeEventListener("userLogout", handleLogout);
+    };
+  }, []);
 
   const handleSubmitUrl = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -528,6 +690,14 @@ export default function Dashboard() {
     )
       return;
 
+    // Mark refresh as used
+    markRefreshAsUsed();
+    setCanRefreshRecommendations(false);
+    setRefreshLimitMessage(
+      "You've already refreshed today. Come back tomorrow for a new refresh!"
+    );
+
+    // Load new recommendations - this will automatically save to localStorage
     await loadRecommendations(userPreferences, true);
   };
 
@@ -536,7 +706,12 @@ export default function Dashboard() {
     setShowOptionsModal(true);
   };
 
-  const displayVideos = showVideos ? streamedVideos : trendingVideos;
+  const displayVideos =
+    showVideos || hasLoadedRecommendations
+      ? streamedVideos.length > 0
+        ? streamedVideos
+        : trendingVideos
+      : trendingVideos;
 
   return (
     <>
