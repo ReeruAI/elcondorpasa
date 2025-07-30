@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 interface UserShort {
   title: string;
   virality_score: number;
+  description?: string;
   captions: {
     tiktok: string;
     youtube: string;

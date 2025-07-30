@@ -256,11 +256,12 @@ export default function DownloadButton({
     alignItems: "center",
     justifyContent: "center",
     gap: "8px",
+    width: "100%", // Add this to make button full width
     ...style,
   };
 
   return (
-    <div style={{ display: "inline-block" }}>
+    <>
       <button
         onClick={downloadFile}
         disabled={isDownloading || disabled}
@@ -313,7 +314,10 @@ export default function DownloadButton({
       {showProgress && (progress || downloadProgress > 0) && (
         <div
           style={{
-            marginTop: "8px",
+            position: "absolute",
+            top: "calc(100% + 8px)",
+            left: "0",
+            right: "0",
             padding: "8px 12px",
             backgroundColor: "#e9ecef",
             border: "1px solid #dee2e6",
@@ -321,6 +325,7 @@ export default function DownloadButton({
             fontSize: "14px",
             color: "#495057",
             minWidth: "200px",
+            zIndex: 10,
           }}
         >
           {progress && (
@@ -366,6 +371,6 @@ export default function DownloadButton({
           }
         }
       `}</style>
-    </div>
+    </>
   );
 }

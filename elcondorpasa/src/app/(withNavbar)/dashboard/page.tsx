@@ -545,6 +545,7 @@ export default function Dashboard() {
               virality_score: data.short.virality_score,
               captions: data.short.captions,
               download_url: data.short.download_url,
+              description: data.short.description || "",
             };
             setVideoResult(result);
             setShowLoadingModal(false);
@@ -637,6 +638,7 @@ export default function Dashboard() {
               virality_score: data.short.virality_score,
               captions: data.short.captions,
               download_url: data.short.download_url,
+              description: data.short.description || "",
             };
             setVideoResult(result);
             setShowLoadingModal(false);

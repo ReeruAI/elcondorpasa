@@ -21,6 +21,7 @@ interface VideoResultModalProps {
   videoData: {
     title: string;
     virality_score: number;
+    description: string;
     captions: {
       tiktok: string;
       youtube: string;
@@ -181,6 +182,27 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                     Your browser does not support the video tag.
                   </video>
                 </motion.div>
+
+                {/* Video Description */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="mt-4 p-4 rounded-xl"
+                  style={{
+                    backgroundColor: "rgba(255, 255, 255, 0.05)",
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  <h3 className="text-sm font-semibold mb-2 text-gray-300 uppercase tracking-wider">
+                    Description
+                  </h3>
+                  <p className="text-gray-200 text-sm leading-relaxed">
+                    {videoData.description}
+                  </p>
+                </motion.div>
               </div>
 
               {/* Info Panel - Right Side */}
@@ -328,7 +350,8 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                         showProgress={false}
                         style={{
                           width: "100%",
-                          padding: "16px 24px",
+                          height: "56px",
+                          padding: "0 24px",
                           background:
                             "linear-gradient(to right, #ec4899, #a855f7)",
                           color: "white",
@@ -339,6 +362,9 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                           cursor: "pointer",
                           transition: "all 0.3s",
                           boxShadow: "0 10px 30px rgba(236, 72, 153, 0.3)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                         onStart={() => console.log("Download started")}
                         onSuccess={() => console.log("Download completed")}
@@ -349,10 +375,12 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                         onMouseEnter={(e: any) => {
                           e.currentTarget.style.boxShadow =
                             "0 15px 40px rgba(236, 72, 153, 0.4)";
+                          e.currentTarget.style.transform = "translateY(-2px)";
                         }}
                         onMouseLeave={(e: any) => {
                           e.currentTarget.style.boxShadow =
                             "0 10px 30px rgba(236, 72, 153, 0.3)";
+                          e.currentTarget.style.transform = "translateY(0)";
                         }}
                       >
                         <div
@@ -364,10 +392,7 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                           }}
                         >
                           <Download style={{ width: "20px", height: "20px" }} />
-                          <span className="hidden sm:inline">
-                            Download Video
-                          </span>
-                          <span className="sm:hidden">Download</span>
+                          <span>Download</span>
                         </div>
                       </DownloadButton>
                     </div>
@@ -379,7 +404,7 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                           whileHover={{ scale: 1.02, y: -2 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={handleYouTubeLogin}
-                          className="w-full font-semibold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all duration-300 text-white"
+                          className="w-full h-14 font-semibold px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all duration-300 text-white"
                           style={{
                             backgroundColor: "rgba(220, 38, 38, 0.9)",
                             backdropFilter: "blur(10px)",
@@ -401,10 +426,7 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                           }}
                         >
                           <Youtube className="w-5 h-5" />
-                          <span className="hidden sm:inline">
-                            Connect YouTube
-                          </span>
-                          <span className="sm:hidden">YouTube</span>
+                          <span>Connect</span>
                         </motion.button>
                       ) : (
                         <motion.button
@@ -415,7 +437,7 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                           whileTap={{ scale: isUploading ? 1 : 0.98 }}
                           onClick={handleUpload}
                           disabled={isUploading}
-                          className={`w-full font-semibold py-4 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all duration-300 text-white ${
+                          className={`w-full h-14 font-semibold px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all duration-300 text-white ${
                             isUploading ? "cursor-not-allowed opacity-70" : ""
                           }`}
                           style={{
@@ -435,18 +457,12 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
                           {isUploading ? (
                             <>
                               <Loader2 className="w-5 h-5 animate-spin" />
-                              <span className="hidden sm:inline">
-                                {uploadStatus}
-                              </span>
-                              <span className="sm:hidden">Uploading</span>
+                              <span>Uploading</span>
                             </>
                           ) : (
                             <>
                               <Youtube className="w-5 h-5" />
-                              <span className="hidden sm:inline">
-                                Upload to YouTube
-                              </span>
-                              <span className="sm:hidden">Upload</span>
+                              <span>Upload</span>
                             </>
                           )}
                         </motion.button>
