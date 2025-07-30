@@ -194,6 +194,7 @@ class KlapModel {
         instagram: string;
       };
       download_url: string;
+      description?: string;
     }
   ): Promise<void> {
     try {

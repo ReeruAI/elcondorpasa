@@ -750,6 +750,7 @@ export async function POST(request: NextRequest) {
                   virality_score: bestShort.virality_score,
                   captions: formattedCaptions,
                   download_url: downloadUrl,
+                  description: bestShort.virality_score_explanation || "", // Added description here
                 });
 
                 console.log(
