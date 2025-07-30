@@ -83,8 +83,13 @@ export interface Step {
 export interface PricingTier {
   name: string;
   tokens: number;
+  price: number;
   desc: string;
+  features: string[];
   popular: boolean;
+  icon: React.ElementType;
+  color: string;
+  bgGradient: string;
 }
 
 export interface Feature {
@@ -214,6 +219,7 @@ export interface ProcessingState {
 export interface VideoResult {
   title: string;
   virality_score: number;
+  description: string;
   captions: {
     tiktok: string;
     youtube: string;
@@ -247,6 +253,7 @@ export interface VideoShort {
   download_url: string;
   created_at: string;
   virality_score?: number;
+  description?: string;
   captions?: {
     tiktok: string;
     youtube: string;
@@ -289,4 +296,3 @@ export interface OTPStatusData {
   otpCode?: string;
   otpExpiresAt?: Date;
 }
-

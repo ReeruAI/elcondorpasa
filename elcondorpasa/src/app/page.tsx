@@ -20,6 +20,8 @@ import {
   Rocket,
   RefreshCw,
   AlertCircle,
+  Crown,
+  Check,
 } from "lucide-react";
 import LoadingScreen from "@/components/LoadingScreen";
 import { Feature, PricingTier, Stat, Step, Testimonial } from "@/types";
@@ -167,16 +169,46 @@ const STEPS: Step[] = [
 const PRICING_TIERS: PricingTier[] = [
   {
     name: "Starter",
-    tokens: 20,
-    desc: "Try out / test waters",
+    tokens: 1,
+    price: 25000,
+    desc: "Perfect for getting started",
+    features: ["1 Reeru Token", "Basic features", "24/7 Support"],
     popular: false,
+    icon: Sparkles,
+    color: "from-blue-400 to-blue-600",
+    bgGradient: "bg-blue-500/10",
   },
-  { name: "Pro", tokens: 60, desc: "1–2 Shorts a day", popular: true },
+  {
+    name: "Pro",
+    tokens: 6,
+    price: 120000,
+    desc: "Best for regular creators",
+    features: [
+      "6 Reeru Tokens",
+      "All Pro features",
+      "Priority support",
+      "20% Bonus",
+    ],
+    popular: true,
+    icon: Zap,
+    color: "from-[#D68CB8] to-pink-400",
+    bgGradient: "bg-[#D68CB8]/10",
+  },
   {
     name: "Studio",
-    tokens: 150,
-    desc: "Grow faceless channel",
+    tokens: 10,
+    price: 225000,
+    desc: "Scale your production",
+    features: [
+      "10 Reeru Tokens",
+      "All Studio features",
+      "Dedicated support",
+      "Best value",
+    ],
     popular: false,
+    icon: Crown,
+    color: "from-purple-400 to-purple-600",
+    bgGradient: "bg-purple-500/10",
   },
 ];
 
@@ -199,12 +231,12 @@ const FEATURES: Feature[] = [
   {
     icon: Rocket,
     title: "Direct Publishing",
-    desc: "YouTube via Zapier",
+    desc: "Upload to YouTube",
   },
   {
     icon: RefreshCw,
     title: "Smart Notifications",
-    desc: "Telegram/Discord alerts",
+    desc: "Telegram alerts",
   },
 ];
 
@@ -237,7 +269,7 @@ const FINAL_STATS: Stat[] = [
 
 // Video Preview Component
 interface VideoPreviewProps {
-  title: string;
+  title?: string;
   aspectRatio?: string;
   duration?: string;
 }
@@ -257,24 +289,18 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
       WebkitBackdropFilter: "blur(10px)",
     }}
   >
-    <img
-      src="https://placehold.co/600x400"
-      alt={title}
+    <video
+      src="/demo-shorts.mp4"
+      autoPlay
+      loop
+      muted
+      playsInline
       className="w-full h-full object-cover opacity-80"
-    />
-    <motion.div
-      whileHover={{ scale: 1.1 }}
-      className="absolute inset-0 flex items-center justify-center"
     >
-      <div
-        className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center shadow-2xl"
-        style={{
-          boxShadow: "0 20px 40px rgba(236, 72, 153, 0.3)",
-        }}
-      >
-        <Play className="h-6 w-6 sm:h-8 sm:w-8 text-white ml-1" />
-      </div>
-    </motion.div>
+      <source src="/demo-shorts.mp4" type="video/mp4" />
+      Your browser does not support the video tag.
+    </video>
+
     {duration && (
       <div
         className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm text-white"
@@ -324,14 +350,14 @@ export default function Home() {
                 transition={{ duration: 0.8, delay: 0.2 }}
                 className="text-3xl sm:text-5xl lg:text-7xl font-bold mb-4 sm:mb-6 text-white"
               >
-                Auto-Generate Viral YouTube Shorts in{" "}
+                Auto-Generate Viral YouTube Shorts,{" "}
                 <motion.span
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.6, delay: 0.6 }}
                   className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 block sm:inline"
                 >
-                  60 Seconds
+                  Without Hassle
                 </motion.span>
               </motion.h1>
 
@@ -508,10 +534,7 @@ export default function Home() {
                   <h3 className="text-xl sm:text-2xl font-bold mb-4 text-center text-white">
                     Before
                   </h3>
-                  <VideoPreview
-                    title="Long form video preview"
-                    duration="45:32"
-                  />
+                  <VideoPreview />
                 </motion.div>
 
                 <motion.div
@@ -540,32 +563,17 @@ export default function Home() {
                           WebkitBackdropFilter: "blur(10px)",
                         }}
                       >
-                        <img
-                          src={`https://placehold.co/600x400`}
-                          alt={`Short video ${i}`}
+                        <video
+                          src={`/short-${i}.mp4`}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
                           className="w-full h-full object-cover opacity-80"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <motion.div
-                            whileHover={{ scale: 1.2 }}
-                            className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg"
-                            style={{
-                              boxShadow: "0 10px 30px rgba(236, 72, 153, 0.3)",
-                            }}
-                          >
-                            <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
-                          </motion.div>
-                        </div>
-                        <div
-                          className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs text-white"
-                          style={{
-                            backgroundColor: "rgba(0, 0, 0, 0.7)",
-                            backdropFilter: "blur(10px)",
-                            WebkitBackdropFilter: "blur(10px)",
-                          }}
                         >
-                          0:{30 + i * 15}
-                        </div>
+                          <source src={`/short-${i}.mp4`} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </video>
                       </motion.div>
                     ))}
                   </div>
@@ -573,102 +581,110 @@ export default function Home() {
               </div>
             </div>
           </Section>
-
           {/* Pricing Section */}
           <Section id="pricing" bgColor="secondary">
-            <div className="max-w-4xl mx-auto w-full">
+            <div className="max-w-6xl mx-auto w-full">
               <Heading subtitle="Pay as you grow • No subscriptions">
                 Simple Token Pricing
               </Heading>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-                {PRICING_TIERS.map((tier, index) => (
-                  <FadeInView
-                    key={index}
-                    delay={index * 0.2}
-                    y={50}
-                    whileHover={{ scale: 1.05, y: -10 }}
-                    className="relative p-5 sm:p-6 rounded-2xl transition-all duration-300"
-                    style={{
-                      backgroundColor: tier.popular
-                        ? "rgba(236, 72, 153, 0.1)"
-                        : "rgba(255, 255, 255, 0.05)",
-                      backdropFilter: "blur(20px)",
-                      WebkitBackdropFilter: "blur(20px)",
-                      border: tier.popular
-                        ? "1px solid rgba(236, 72, 153, 0.3)"
-                        : "1px solid rgba(255, 255, 255, 0.1)",
-                      boxShadow: tier.popular
-                        ? "0 20px 40px rgba(236, 72, 153, 0.2)"
-                        : "none",
-                    }}
-                  >
-                    {tier.popular && (
-                      <motion.div
-                        initial={{ scale: 0, y: -20 }}
-                        animate={{ scale: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.5 }}
-                        className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full text-xs font-semibold text-white"
-                      >
-                        POPULAR
-                      </motion.div>
-                    )}
-                    <h3 className="text-xl sm:text-2xl font-bold mb-2 text-white">
-                      {tier.name}
-                    </h3>
-                    <div className="text-3xl sm:text-4xl font-bold mb-3 sm:mb-4 text-white">
-                      {tier.tokens}
-                      <span className="text-base sm:text-lg text-gray-400 font-normal">
-                        {" "}
-                        tokens
-                      </span>
-                    </div>
-                    <p className="text-sm sm:text-base text-gray-400 mb-4 sm:mb-6">
-                      {tier.desc}
-                    </p>
-                    <ScaleButton
-                      onClick={handleRegisterClick}
-                      className={`w-full py-2.5 sm:py-3 rounded-full font-semibold text-sm sm:text-base transition-all duration-300 ${
-                        tier.popular
-                          ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg"
-                          : "text-white"
-                      }`}
-                      style={{
-                        backgroundColor: tier.popular
-                          ? ""
-                          : "rgba(255, 255, 255, 0.1)",
-                        boxShadow: tier.popular
-                          ? "0 10px 30px rgba(236, 72, 153, 0.3)"
-                          : "none",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (tier.popular) {
-                          e.currentTarget.style.boxShadow =
-                            "0 15px 40px rgba(236, 72, 153, 0.4)";
-                        } else {
-                          e.currentTarget.style.backgroundColor =
-                            "rgba(255, 255, 255, 0.2)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (tier.popular) {
-                          e.currentTarget.style.boxShadow =
-                            "0 10px 30px rgba(236, 72, 153, 0.3)";
-                        } else {
-                          e.currentTarget.style.backgroundColor =
-                            "rgba(255, 255, 255, 0.1)";
-                        }
-                      }}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+                {PRICING_TIERS.map((tier, index) => {
+                  const Icon = tier.icon;
+
+                  return (
+                    <FadeInView
+                      key={index}
+                      delay={index * 0.1}
+                      y={20}
+                      className="relative h-full"
                     >
-                      Get Started
-                    </ScaleButton>
-                  </FadeInView>
-                ))}
+                      {tier.popular && (
+                        <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-10">
+                          <span className="bg-gradient-to-r from-[#D68CB8] to-pink-400 text-white text-xs font-bold px-3 py-1 rounded-full">
+                            MOST POPULAR
+                          </span>
+                        </div>
+                      )}
+
+                      <motion.div
+                        whileHover={{ scale: 1.05, y: -8 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={`relative h-full bg-white/5 backdrop-blur-sm rounded-2xl p-6 border ${
+                          tier.popular
+                            ? "border-[#D68CB8]/50"
+                            : "border-white/10"
+                        } cursor-pointer transition-all duration-300 hover:border-white/20 flex flex-col`}
+                        style={{
+                          boxShadow: tier.popular
+                            ? "0 20px 40px rgba(214, 140, 184, 0.2)"
+                            : "none",
+                        }}
+                      >
+                        <div
+                          className={`inline-flex items-center justify-center w-12 h-12 ${tier.bgGradient} rounded-xl mb-4`}
+                        >
+                          <Icon className="w-6 h-6 text-white" />
+                        </div>
+
+                        <h3 className="text-xl font-bold text-white mb-2">
+                          {tier.name}
+                        </h3>
+
+                        <div className="mb-2">
+                          <span className="text-3xl font-bold text-white">
+                            Rp {tier.price.toLocaleString("id-ID")}
+                          </span>
+                        </div>
+
+                        <p className="text-gray-400 text-sm mb-6">
+                          {tier.desc}
+                        </p>
+
+                        <ul className="space-y-3 mb-6 flex-grow">
+                          {tier.features.map((feature, featureIndex) => (
+                            <li
+                              key={featureIndex}
+                              className="flex items-start text-gray-300 text-sm"
+                            >
+                              <Check className="w-4 h-4 text-green-400 mr-2 flex-shrink-0 mt-0.5" />
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+
+                        <ScaleButton
+                          onClick={handleRegisterClick}
+                          className={`w-full py-3 px-4 bg-gradient-to-r ${tier.color} text-white font-semibold rounded-xl hover:shadow-lg transition-all duration-300 mt-auto`}
+                          style={{
+                            boxShadow: tier.popular
+                              ? "0 10px 30px rgba(214, 140, 184, 0.3)"
+                              : "none",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (tier.popular) {
+                              e.currentTarget.style.boxShadow =
+                                "0 15px 40px rgba(214, 140, 184, 0.4)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (tier.popular) {
+                              e.currentTarget.style.boxShadow =
+                                "0 10px 30px rgba(214, 140, 184, 0.3)";
+                            }
+                          }}
+                        >
+                          Get Started
+                        </ScaleButton>
+                      </motion.div>
+                    </FadeInView>
+                  );
+                })}
               </div>
 
               <FadeInView
-                delay={0.8}
-                className="text-center mt-6 sm:mt-8 text-gray-400 text-sm sm:text-base flex items-center justify-center gap-2"
+                delay={0.4}
+                className="text-center mt-8 text-gray-400 text-sm flex items-center justify-center gap-2"
               >
                 <AlertCircle className="w-4 h-4" />
                 Get 2 free tokens on sign up — no card required.
