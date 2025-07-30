@@ -83,7 +83,7 @@ const packages: Package[] = [
   {
     id: "68838f3c3d6a8b11084c7f7a",
     name: "Starter",
-    price: 20000,
+    price: 25000,
     reeruToken: 1,
     icon: Sparkles,
     color: "from-blue-400 to-blue-600",
@@ -93,7 +93,7 @@ const packages: Package[] = [
   {
     id: "68838f3c3d6a8b11084c7f7b",
     name: "Pro",
-    price: 100000,
+    price: 120000,
     reeruToken: 6,
     popular: true,
     icon: Zap,
@@ -109,7 +109,7 @@ const packages: Package[] = [
   {
     id: "68838f3c3d6a8b11084c7f7c",
     name: "Studio",
-    price: 160000,
+    price: 225000,
     reeruToken: 10,
     icon: Crown,
     color: "from-purple-400 to-purple-600",

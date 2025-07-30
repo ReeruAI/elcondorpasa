@@ -12,6 +12,8 @@ import {
   Hash,
   Trash2,
 } from "lucide-react";
+import CursorGlow from "@/components/CursorGlow";
+import ParticleBackground from "@/components/yourclip/ParticleBackground";
 
 interface OTPStatus {
   isConnected: boolean;
@@ -20,6 +22,22 @@ interface OTPStatus {
   otpCode?: string;
   otpExpiresAt?: string;
 }
+
+// Animation variants
+const fadeInVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (delay: number = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, delay },
+  }),
+};
+
+const scaleVariants = {
+  idle: { scale: 1 },
+  hover: { scale: 1.05 },
+  tap: { scale: 0.95 },
+};
 
 export default function OTPTestPage() {
   const [otpStatus, setOtpStatus] = useState<OTPStatus | null>(null);
@@ -123,149 +141,277 @@ export default function OTPTestPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#1D1D1D] py-12 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <h1 className="text-3xl font-bold text-white mb-2">
-            🧪 OTP Testing Page
-          </h1>
-          <p className="text-gray-400">
-            Test OTP functionality for Telegram integration
-          </p>
-        </motion.div>
+    <div className="min-h-screen relative bg-gradient-to-b from-[#1D1D1D] to-black overflow-hidden">
+      {/* Background Effects */}
+      <ParticleBackground />
 
-        <div className="space-y-6">
-          {/* Current Status */}
+      {/* Cursor Glow Effect */}
+      <CursorGlow />
+
+      <div className="relative z-10 min-h-screen py-12 px-4">
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10"
+            variants={fadeInVariants}
+            initial="hidden"
+            animate="visible"
+            className="text-center mb-8"
           >
-            <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-[#D68CB8]" />
-              Current Status
-            </h3>
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ duration: 0.8, delay: 0.2, type: "spring" }}
+              className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full mb-6 shadow-2xl"
+              style={{
+                boxShadow: "0 20px 40px rgba(236, 72, 153, 0.3)",
+              }}
+            >
+              <MessageCircle className="w-10 h-10 text-white" />
+            </motion.div>
+            <h1 className="text-4xl sm:text-5xl font-bold text-white mb-3">
+              OTP Testing Page
+            </h1>
+            <p className="text-base sm:text-lg text-gray-300">
+              Test OTP functionality for Telegram integration
+            </p>
+          </motion.div>
 
-            {otpStatus ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">Connected:</span>
-                  <span
-                    className={
-                      otpStatus.isConnected ? "text-green-400" : "text-red-400"
-                    }
-                  >
-                    {otpStatus.isConnected ? "✅ Yes" : "❌ No"}
-                  </span>
-                </div>
+          <div className="space-y-6">
+            {/* Current Status */}
+            <motion.div
+              variants={fadeInVariants}
+              initial="hidden"
+              animate="visible"
+              custom={0.1}
+              className="rounded-3xl p-6 sm:p-8 shadow-2xl"
+              style={{
+                backgroundColor: "rgba(31, 31, 31, 0.3)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+            >
+              <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-pink-400" />
+                Current Status
+              </h3>
 
-                {otpStatus.telegramUsername && (
+              {otpStatus ? (
+                <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400">Username:</span>
-                    <span className="text-white">
-                      @{otpStatus.telegramUsername}
+                    <span className="text-gray-400">Connected:</span>
+                    <span
+                      className={
+                        otpStatus.isConnected
+                          ? "text-green-400"
+                          : "text-red-400"
+                      }
+                    >
+                      {otpStatus.isConnected ? "✅ Yes" : "❌ No"}
                     </span>
                   </div>
-                )}
 
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">Active OTP:</span>
-                  <span
-                    className={
-                      otpStatus.hasActiveOTP
-                        ? "text-green-400"
-                        : "text-gray-500"
-                    }
-                  >
-                    {otpStatus.hasActiveOTP ? "✅ Yes" : "❌ No"}
-                  </span>
-                </div>
-
-                {otpStatus.hasActiveOTP && otpStatus.otpCode && (
-                  <div className="bg-[#D68CB8]/10 border border-[#D68CB8]/30 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[#D68CB8] font-semibold">
-                        OTP Code:
+                  {otpStatus.telegramUsername && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400">Username:</span>
+                      <span className="text-white">
+                        @{otpStatus.telegramUsername}
                       </span>
-                      <button
-                        onClick={copyOTP}
-                        className="p-1 bg-white/10 hover:bg-white/20 rounded transition-colors"
-                      >
-                        {copied ? (
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <Copy className="w-4 h-4 text-gray-400" />
-                        )}
-                      </button>
                     </div>
-                    <code className="text-xl font-mono text-white block bg-black/20 px-3 py-2 rounded">
-                      {otpStatus.otpCode}
-                    </code>
-                    <div className="text-sm text-gray-400 mt-2 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      Expires in: {getRemainingTime()}
-                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">Active OTP:</span>
+                    <span
+                      className={
+                        otpStatus.hasActiveOTP
+                          ? "text-green-400"
+                          : "text-gray-500"
+                      }
+                    >
+                      {otpStatus.hasActiveOTP ? "✅ Yes" : "❌ No"}
+                    </span>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-gray-400">Loading status...</div>
-            )}
 
-            <button
-              onClick={testGetStatus}
-              disabled={isLoading}
-              className="w-full mt-4 bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                  {otpStatus.hasActiveOTP && otpStatus.otpCode && (
+                    <div
+                      className="rounded-xl p-4"
+                      style={{
+                        backgroundColor: "rgba(236, 72, 153, 0.1)",
+                        border: "1px solid rgba(236, 72, 153, 0.3)",
+                        backdropFilter: "blur(10px)",
+                        WebkitBackdropFilter: "blur(10px)",
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-pink-400 font-semibold">
+                          OTP Code:
+                        </span>
+                        <motion.button
+                          variants={scaleVariants}
+                          initial="idle"
+                          whileHover="hover"
+                          whileTap="tap"
+                          onClick={copyOTP}
+                          className="p-2 rounded-lg transition-all"
+                          style={{
+                            backgroundColor: "rgba(255, 255, 255, 0.1)",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              "rgba(255, 255, 255, 0.2)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              "rgba(255, 255, 255, 0.1)";
+                          }}
+                        >
+                          {copied ? (
+                            <CheckCircle className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-gray-400" />
+                          )}
+                        </motion.button>
+                      </div>
+                      <code
+                        className="text-xl font-mono text-white block px-3 py-2 rounded-lg"
+                        style={{
+                          backgroundColor: "rgba(0, 0, 0, 0.3)",
+                          backdropFilter: "blur(10px)",
+                          WebkitBackdropFilter: "blur(10px)",
+                        }}
+                      >
+                        {otpStatus.otpCode}
+                      </code>
+                      <div className="text-sm text-gray-400 mt-2 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Expires in: {getRemainingTime()}
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <RefreshCw className="w-4 h-4" />
+                <div className="text-gray-400">Loading status...</div>
               )}
-              Refresh Status
-            </button>
-          </motion.div>
 
-          {/* OTP Actions */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10"
-          >
-            <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-              <Hash className="w-5 h-5 text-[#D68CB8]" />
-              OTP Actions
-            </h3>
-
-            <div className="space-y-3">
-              <button
-                onClick={testGenerateOTP}
-                disabled={isGenerating}
-                className="w-full bg-[#D68CB8] hover:bg-pink-400 text-white px-4 py-3 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              <motion.button
+                variants={scaleVariants}
+                initial="idle"
+                whileHover="hover"
+                whileTap="tap"
+                onClick={testGetStatus}
+                disabled={isLoading}
+                className="w-full mt-4 text-white px-4 py-3 rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 font-semibold"
+                style={{
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.backgroundColor =
+                      "rgba(255, 255, 255, 0.2)";
+                    e.currentTarget.style.border =
+                      "1px solid rgba(214, 140, 184, 0.5)";
+                    e.currentTarget.style.boxShadow =
+                      "0 0 20px rgba(214, 140, 184, 0.2)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor =
+                    "rgba(255, 255, 255, 0.1)";
+                  e.currentTarget.style.border =
+                    "1px solid rgba(255, 255, 255, 0.1)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
               >
-                {isGenerating ? (
+                {isLoading ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
-                  <MessageCircle className="w-4 h-4" />
+                  <RefreshCw className="w-4 h-4" />
                 )}
-                Generate OTP
-              </button>
+                Refresh Status
+              </motion.button>
+            </motion.div>
 
-              <button
-                onClick={testCancelOTP}
-                className="w-full bg-red-600 hover:bg-red-500 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Cancel OTP
-              </button>
-            </div>
-          </motion.div>
+            {/* OTP Actions */}
+            <motion.div
+              variants={fadeInVariants}
+              initial="hidden"
+              animate="visible"
+              custom={0.2}
+              className="rounded-3xl p-6 sm:p-8 shadow-2xl"
+              style={{
+                backgroundColor: "rgba(31, 31, 31, 0.3)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+            >
+              <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <Hash className="w-5 h-5 text-pink-400" />
+                OTP Actions
+              </h3>
+
+              <div className="space-y-3">
+                <motion.button
+                  variants={scaleVariants}
+                  initial="idle"
+                  whileHover={isGenerating ? "idle" : "hover"}
+                  whileTap={isGenerating ? "idle" : "tap"}
+                  onClick={testGenerateOTP}
+                  disabled={isGenerating}
+                  className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white px-4 py-4 rounded-xl font-semibold shadow-lg transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{
+                    boxShadow: "0 10px 30px rgba(236, 72, 153, 0.3)",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isGenerating) {
+                      e.currentTarget.style.boxShadow =
+                        "0 15px 40px rgba(236, 72, 153, 0.4)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow =
+                      "0 10px 30px rgba(236, 72, 153, 0.3)";
+                  }}
+                >
+                  {isGenerating ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <MessageCircle className="w-4 h-4" />
+                  )}
+                  Generate OTP
+                </motion.button>
+
+                <motion.button
+                  variants={scaleVariants}
+                  initial="idle"
+                  whileHover="hover"
+                  whileTap="tap"
+                  onClick={testCancelOTP}
+                  className="w-full text-white px-4 py-4 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2"
+                  style={{
+                    backgroundColor: "rgba(239, 68, 68, 0.1)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor =
+                      "rgba(239, 68, 68, 0.2)";
+                    e.currentTarget.style.boxShadow =
+                      "0 10px 30px rgba(239, 68, 68, 0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor =
+                      "rgba(239, 68, 68, 0.1)";
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Cancel OTP
+                </motion.button>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </div>
     </div>
