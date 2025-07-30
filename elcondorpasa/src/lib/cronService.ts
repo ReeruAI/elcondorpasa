@@ -2,6 +2,8 @@ import * as cron from "node-cron";
 import NotificationService from "./notificationService";
 import UserModel from "@/db/models/UserModel";
 import HistoryModel, { History, Video } from "@/db/models/HistoryModel";
+import PreferenceModel from "@/db/models/PreferenceModel";
+import { getYouTubeRecommendations } from "./gemini";
 
 class CronService {
   private static instance: CronService;
@@ -27,7 +29,7 @@ class CronService {
   // Daily reminder - setiap hari jam 9 pagi
   startDailyReminder() {
     const job = cron.schedule(
-      "0 10 * * *", // Run every minute for testing (change to "0 9 * * *" for production)
+      "0 17 * * *",
       async () => {
         await this.sendDailyReminder();
       },
@@ -45,7 +47,7 @@ class CronService {
     await this.sendDailyReminder();
   }
 
-  // Logic untuk daily reminder dengan auto hit gemini API
+  // Main daily reminder logic - SEPARATED CONCERNS
   private async sendDailyReminder() {
     try {
       const today = new Date().toLocaleDateString("id-ID", {
@@ -71,13 +73,24 @@ class CronService {
         try {
           console.log(`🔄 Processing user: ${user._id}`);
 
-          // Hit Gemini API untuk mendapatkan fresh recommendations
-          const userHistory = await this.ensureFreshRecommendations(
+          // STEP 1: Ensure fresh recommendations (separated from message logic)
+          const freshDataEnsured = await this.ensureFreshRecommendations(
+            user._id.toString()
+          );
+
+          if (freshDataEnsured) {
+            console.log(`✅ Fresh data ensured for user: ${user._id}`);
+          } else {
+            console.log(`⚠️ Could not ensure fresh data for user: ${user._id}`);
+          }
+
+          // STEP 2: Get the actual history data for messaging (separated concern)
+          const userHistory = await this.getLatestUserHistory(
             user._id.toString()
           );
 
           if (userHistory && userHistory.length > 0) {
-            // Send multi-part personalized message
+            // STEP 3: Send message using the retrieved history
             const success = await this.sendMultiPartMessage(
               user._id.toString(),
               today,
@@ -86,12 +99,13 @@ class CronService {
 
             if (success) {
               successCount++;
-              console.log(`✅ Successfully sent to user: ${user._id}`);
+              console.log(`✅ Successfully sent message to user: ${user._id}`);
             }
           } else {
-            console.log(
-              `⚠️ No recommendations available for user: ${user._id}`
-            );
+            console.log(`⚠️ No history data available for user: ${user._id}`);
+
+            // Send fallback message when no history is available
+            await this.sendFallbackMessage(user._id.toString());
           }
 
           // Delay untuk avoid rate limiting
@@ -109,13 +123,14 @@ class CronService {
     }
   }
 
-  // Logic untuk ensure fresh recommendations dari Gemini API
-  private async ensureFreshRecommendations(userId: string): Promise<History[]> {
+  // SEPARATED: Only responsible for ensuring fresh data exists
+  private async ensureFreshRecommendations(userId: string): Promise<boolean> {
     try {
-      // 1. Ambil user history terbaru
-      const userHistory = await HistoryModel.getHistoryByUserId(userId, 1, 0);
+      console.log(
+        `🔍 Checking if fresh recommendations needed for user ${userId}`
+      );
 
-      // 2. Check apakah sudah ada data hari ini
+      // Check if today's data exists
       const today = new Date();
       const todayStart = new Date(
         today.getFullYear(),
@@ -123,12 +138,12 @@ class CronService {
         today.getDate()
       );
 
+      const userHistory = await HistoryModel.getHistoryByUserId(userId, 1, 0);
       let needsNewRecommendations = true;
 
       if (userHistory && userHistory.length > 0) {
         const latestHistory = userHistory[0];
 
-        // Check if createdAt exists and is valid
         if (latestHistory.createdAt) {
           const historyDate = new Date(latestHistory.createdAt);
           const historyStart = new Date(
@@ -137,148 +152,139 @@ class CronService {
             historyDate.getDate()
           );
 
-          // Jika data sudah dari hari ini, tidak perlu hit API lagi
           if (historyStart.getTime() === todayStart.getTime()) {
-            console.log(
-              `🎯 Fresh data found for user ${userId}, skipping API call`
-            );
-            needsNewRecommendations = false;
+            console.log(`🎯 Fresh data already exists for user ${userId}`);
+            return true; // Fresh data already exists
           }
         }
       }
 
-      // 3. Jika perlu recommendations baru, hit Gemini API
+      // Fetch new recommendations if needed
       if (needsNewRecommendations) {
         console.log(`🔍 Fetching fresh recommendations for user ${userId}`);
 
-        // Get user's preferences dari history terakhir atau default
         const { contentPreference, languagePreference } =
-          this.getUserPreferences(userHistory);
+          await this.getUserPreferences(userId);
 
-        // Hit Gemini API
-        const success = await this.hitGeminiAPI(
+        const collectedVideos: any[] = [];
+        const streamGenerator = getYouTubeRecommendations(
           userId,
           contentPreference,
           languagePreference
         );
 
-        if (success) {
-          // Ambil data terbaru setelah hit API
-          const freshHistory = await HistoryModel.getHistoryByUserId(
+        for await (const chunk of streamGenerator) {
+          if (typeof chunk === "object" && chunk.type === "video") {
+            collectedVideos.push(chunk.data);
+          }
+        }
+
+        if (collectedVideos.length > 0) {
+          const historyData = {
             userId,
-            1,
-            0
-          );
-          console.log(`✅ Fresh recommendations obtained for user ${userId}`);
-          return freshHistory || [];
+            contentPreference,
+            languagePreference,
+            videos: collectedVideos,
+            source: "YouTube Data API v3 + Gemini Analysis",
+            timestamp: new Date(),
+          };
+
+          await HistoryModel.createHistory(historyData);
+          console.log(`✅ Fresh recommendations saved for user ${userId}`);
+          return true;
         } else {
-          console.log(
-            `⚠️ Failed to get fresh recommendations for user ${userId}`
-          );
-          return userHistory || [];
+          console.log(`⚠️ No recommendations found for user ${userId}`);
+          return false;
         }
       }
 
-      return userHistory || [];
+      return true;
     } catch (error) {
       console.error(
         `❌ Error ensuring fresh recommendations for user ${userId}:`,
         error
       );
-      return [];
-    }
-  }
-
-  // Get user preferences dari history atau default values
-  private getUserPreferences(userHistory: History[]): {
-    contentPreference: string;
-    languagePreference: string;
-  } {
-    if (userHistory && userHistory.length > 0) {
-      const latestHistory = userHistory[0];
-      return {
-        contentPreference: latestHistory.contentPreference || "technology",
-        languagePreference: latestHistory.languagePreference || "english",
-      };
-    }
-
-    // Default preferences jika tidak ada history
-    return {
-      contentPreference: "technology",
-      languagePreference: "english",
-    };
-  }
-
-  // Hit Gemini API untuk mendapatkan recommendations
-  private async hitGeminiAPI(
-    userId: string,
-    contentPreference: string,
-    languagePreference: string
-  ): Promise<boolean> {
-    try {
-      console.log(`🤖 Calling Gemini API for user ${userId}...`);
-
-      // Prepare request data
-      const requestBody = {
-        contentPreference,
-        languagePreference,
-      };
-
-      // Hit internal API route
-      const response = await fetch(
-        `${
-          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-        }/api/gemini/route`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-userId": userId,
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
-
-      if (!response.ok) {
-        console.error(
-          `❌ Gemini API call failed for user ${userId}: ${response.status} ${response.statusText}`
-        );
-        return false;
-      }
-
-      // Since it's a streaming response, we need to consume the stream
-      const reader = response.body?.getReader();
-      if (reader) {
-        let completed = false;
-
-        while (!completed) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            completed = true;
-            break;
-          }
-
-          // Convert Uint8Array to string
-          const chunk = new TextDecoder().decode(value);
-
-          // Check for completion marker
-          if (chunk.includes("[DONE]")) {
-            completed = true;
-            break;
-          }
-        }
-      }
-
-      console.log(`✅ Gemini API call completed for user ${userId}`);
-      return true;
-    } catch (error) {
-      console.error(`❌ Error hitting Gemini API for user ${userId}:`, error);
       return false;
     }
   }
 
-  // Send multi-part message (header + video posts + footer)
+  // SEPARATED: Only responsible for retrieving history data
+  private async getLatestUserHistory(userId: string): Promise<History[]> {
+    try {
+      console.log(`📖 Retrieving latest history for user ${userId}`);
+
+      const userHistory = await HistoryModel.getHistoryByUserId(userId, 1, 0);
+
+      if (userHistory && userHistory.length > 0) {
+        console.log(`✅ Found history data for user ${userId}`);
+        return userHistory;
+      } else {
+        console.log(`⚠️ No history data found for user ${userId}`);
+        return [];
+      }
+    } catch (error) {
+      console.error(`❌ Error retrieving history for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  // Send fallback message when no history is available - FIXED HTML FORMAT
+  private async sendFallbackMessage(userId: string): Promise<boolean> {
+    try {
+      const fallbackMessage = `📢 <b>Good day Reeruser!</b>
+
+✨ Welcome to ReeruAI! ✨
+
+Start exploring videos to get personalized recommendations! Use /recommend to begin.
+
+🎬 Once you have some video history, I'll send you daily curated picks perfect for creating viral Shorts &amp; Reels!
+
+👉 <a href="https://reeru.ai">Try ReeruAI Now!</a>`;
+
+      return await NotificationService.notifyUser(
+        userId,
+        fallbackMessage,
+        "info"
+      );
+    } catch (error) {
+      console.error(
+        `❌ Error sending fallback message to user ${userId}:`,
+        error
+      );
+      return false;
+    }
+  }
+
+  // Get user preferences dari history atau default values
+  private async getUserPreferences(userId: string): Promise<{
+    contentPreference: string;
+    languagePreference: string;
+  }> {
+    try {
+      const preferences = await PreferenceModel.getPreferenceByUserId(userId);
+
+      if (preferences) {
+        return {
+          contentPreference: preferences.contentPreference || "technology",
+          languagePreference: preferences.languagePreference || "english",
+        };
+      }
+
+      // Default preferences if none are found
+      return {
+        contentPreference: "technology",
+        languagePreference: "english",
+      };
+    } catch (error) {
+      console.error(`❌ Error fetching preferences for user ${userId}:`, error);
+      return {
+        contentPreference: "technology",
+        languagePreference: "english",
+      };
+    }
+  }
+
+  // Send multi-part message (header + video posts + footer) - FIXED HTML FORMAT
   private async sendMultiPartMessage(
     userId: string,
     today: string,
@@ -288,6 +294,10 @@ class CronService {
       // Get user preferences and videos
       const { contentPreference, videos } = this.extractUserData(userHistory);
 
+      console.log(
+        `📝 Sending message to user ${userId} with ${videos.length} videos`
+      );
+
       // 1. Send Header
       const headerMessage = this.createHeaderMessage(contentPreference);
       const headerSuccess = await NotificationService.notifyUser(
@@ -296,13 +306,20 @@ class CronService {
         "info"
       );
 
-      if (!headerSuccess) return false;
+      if (!headerSuccess) {
+        console.error(`❌ Failed to send header to user ${userId}`);
+        return false;
+      }
 
       // Small delay between messages
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       // 2. Send Video Posts (if any)
       if (videos && videos.length > 0) {
+        console.log(
+          `📹 Sending ${videos.length} video messages to user ${userId}`
+        );
+
         for (let i = 0; i < videos.length; i++) {
           const videoMessage = this.createVideoMessage(i + 1, videos[i]);
 
@@ -318,7 +335,7 @@ class CronService {
           );
 
           if (!videoSuccess) {
-            console.error(`Failed to send video ${i + 1} to user ${userId}`);
+            console.error(`❌ Failed to send video ${i + 1} to user ${userId}`);
           }
 
           // Small delay between video messages
@@ -326,8 +343,12 @@ class CronService {
         }
       } else {
         // Send message if no videos available
-        const noVideosMessage =
-          "🎬 *No recent videos found*\n\nStart exploring videos to get personalized recommendations! Use /recommend";
+        console.log(
+          `📭 No videos found for user ${userId}, sending no-videos message`
+        );
+        const noVideosMessage = `🎬 <b>No recent videos found</b>
+
+Start exploring videos to get personalized recommendations! Use /recommend`;
         await NotificationService.notifyUser(userId, noVideosMessage, "info");
       }
 
@@ -342,9 +363,18 @@ class CronService {
         "info"
       );
 
-      return footerSuccess;
+      if (!footerSuccess) {
+        console.error(`❌ Failed to send footer to user ${userId}`);
+        return false;
+      }
+
+      console.log(`✅ Successfully sent complete message to user ${userId}`);
+      return true;
     } catch (error) {
-      console.error("Error sending multi-part message:", error);
+      console.error(
+        `❌ Error sending multi-part message to user ${userId}:`,
+        error
+      );
       return false;
     }
   }
@@ -355,6 +385,7 @@ class CronService {
     videos: string[];
   } {
     if (!userHistory || userHistory.length === 0) {
+      console.log("⚠️ No user history provided to extractUserData");
       return { contentPreference: null, videos: [] };
     }
 
@@ -362,28 +393,32 @@ class CronService {
     const contentPreference = latestHistory.contentPreference;
 
     // Get 5 newest video URLs from the most recent history entry
-    const videos = latestHistory.videos
-      .slice(-5) // Get last 5 videos from the array
-      .map((video) => video.videoUrl);
+    const videos = Array.isArray(latestHistory.videos)
+      ? latestHistory.videos.slice(-5).map((video) => video.videoUrl)
+      : [];
+
+    console.log(
+      `📊 Extracted data: preference=${contentPreference}, videos=${videos.length}`
+    );
 
     return { contentPreference, videos };
   }
 
-  // Create header message
+  // Create header message - FIXED HTML FORMAT
   private createHeaderMessage(contentPreference: string | null): string {
-    let message = "📢 *Good day Reeruser!*\n\n";
+    let message = "📢 <b>Good day Reeruser!</b>\n\n";
 
     if (contentPreference) {
       // Format content preference for display
       const formattedPreference =
         this.formatContentPreference(contentPreference);
-      message += `✨ Based on your interest in *${formattedPreference}*, we've got today's top picks for you! ✨\n\n`;
+      message += `✨ Based on your interest in <b>${formattedPreference}</b>, we've got today's top picks for you! ✨\n\n`;
     } else {
       message += "✨ We've got today's top video picks for you! ✨\n\n";
     }
 
     message +=
-      "Turn them into viral Shorts & Reels effortlessly with *ReeruAI* – as easy as 1‑2‑3! 🚀";
+      "Turn them into viral Shorts &amp; Reels effortlessly with <b>ReeruAI</b> – as easy as 1‑2‑3! 🚀";
 
     return message;
   }
@@ -396,28 +431,34 @@ class CronService {
       entertainment: "Entertainment",
       music: "Music",
       gaming: "Gaming",
-      game: "Games & Esports",
-      esports: "Games & Esports",
+      game: "Games &amp; Esports",
+      esports: "Games &amp; Esports",
       sports: "Sports",
-      fitness: "Fitness & Health",
-      cooking: "Cooking & Food",
-      travel: "Travel & Adventure",
-      fashion: "Fashion & Style",
+      fitness: "Fitness &amp; Health",
+      cooking: "Cooking &amp; Food",
+      travel: "Travel &amp; Adventure",
+      fashion: "Fashion &amp; Style",
       comedy: "Comedy",
-      news: "News & Current Affairs",
+      news: "News &amp; Current Affairs",
     };
 
     return preferenceMap[preference.toLowerCase()] || preference;
   }
 
-  // Create video message
+  // Create video message - FIXED HTML FORMAT
   private createVideoMessage(index: number, videoUrl: string): string {
-    return `🎬 *Video ${index}:*\n${videoUrl}\n\nTap below to instantly create an engaging Short/Reel with auto-captions! ⬇️`;
+    // HTML format - no need to escape URLs, but escape HTML entities if needed
+    const safeVideoUrl = videoUrl
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    return `🎬 <b>Video ${index}:</b>\n${safeVideoUrl}\n\nTap below to instantly create an engaging Short/Reel with auto-captions! ⬇️`;
   }
 
-  // Create footer message
+  // Create footer message - FIXED HTML FORMAT
   private createFooterMessage(): string {
-    return `✨ *Why ReeruAI?*
+    return `✨ <b>Why ReeruAI?</b>
 
 Create viral Shorts/Reels with automatic captions in just 3 simple steps:
 
@@ -427,7 +468,7 @@ Create viral Shorts/Reels with automatic captions in just 3 simple steps:
 
 No hassle. No editing headaches. Just pure content magic! ✨
 
-👉 [Try ReeruAI Now!](https://reeru.ai)`;
+👉 <a href="https://reeru.ai">Try ReeruAI Now!</a>`;
   }
 
   // Get user statistics for more personalization

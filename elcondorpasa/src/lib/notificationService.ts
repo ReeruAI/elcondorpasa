@@ -20,7 +20,7 @@ class NotificationService {
         return false;
       }
 
-      // Format message berdasarkan type
+      // Format message berdasarkan type - UPDATED TO HTML FORMAT
       let formattedMessage = message;
       switch (type) {
         case "success":
@@ -34,7 +34,14 @@ class NotificationService {
           break;
         case "info":
         default:
-          formattedMessage = `ℹ️ ${message}`;
+          // Don't add ℹ️ prefix for info messages from CronService
+          // as they already have their own formatting
+          formattedMessage =
+            message.startsWith("📢") ||
+            message.startsWith("🎬") ||
+            message.startsWith("✨")
+              ? message
+              : `ℹ️ ${message}`;
           break;
       }
 
@@ -44,8 +51,9 @@ class NotificationService {
         console.log("❌ Bot not available");
         return false;
       }
+
       await bot.sendMessage(user.telegramChatId, formattedMessage, {
-        parse_mode: "Markdown",
+        parse_mode: "HTML", // ✅ CHANGED FROM "Markdown" TO "HTML"
       });
       console.log(`✅ Notification sent to ${user.telegramChatId}`);
       return true;
@@ -77,7 +85,7 @@ class NotificationService {
         return false;
       }
 
-      // Format message berdasarkan type
+      // Format message berdasarkan type - UPDATED TO HTML FORMAT
       let formattedMessage = message;
       switch (type) {
         case "success":
@@ -91,7 +99,13 @@ class NotificationService {
           break;
         case "info":
         default:
-          formattedMessage = `ℹ️ ${message}`;
+          // Don't add ℹ️ prefix for info messages from CronService
+          formattedMessage =
+            message.startsWith("📢") ||
+            message.startsWith("🎬") ||
+            message.startsWith("✨")
+              ? message
+              : `ℹ️ ${message}`;
           break;
       }
 
@@ -108,7 +122,7 @@ class NotificationService {
       };
 
       await bot.sendMessage(user.telegramChatId, formattedMessage, {
-        parse_mode: "Markdown",
+        parse_mode: "HTML", // ✅ CHANGED FROM "Markdown" TO "HTML"
         reply_markup: inlineKeyboard,
       });
 
@@ -143,7 +157,7 @@ class NotificationService {
         return false;
       }
 
-      // Format message berdasarkan type
+      // Format message berdasarkan type - UPDATED TO HTML FORMAT
       let formattedMessage = message;
       switch (type) {
         case "success":
@@ -157,7 +171,12 @@ class NotificationService {
           break;
         case "info":
         default:
-          formattedMessage = `ℹ️ ${message}`;
+          formattedMessage =
+            message.startsWith("📢") ||
+            message.startsWith("🎬") ||
+            message.startsWith("✨")
+              ? message
+              : `ℹ️ ${message}`;
           break;
       }
 
@@ -175,7 +194,7 @@ class NotificationService {
       }
 
       await bot.sendMessage(user.telegramChatId, formattedMessage, {
-        parse_mode: "Markdown",
+        parse_mode: "HTML", // ✅ CHANGED FROM "Markdown" TO "HTML"
         reply_markup: { inline_keyboard },
       });
 
@@ -199,13 +218,14 @@ class NotificationService {
     try {
       const telegramUsers = await UserModel.getAllTelegramUsers();
 
+      // UPDATED TO HTML FORMAT
       let formattedMessage = message;
       switch (type) {
         case "announcement":
-          formattedMessage = `📢 *Pengumuman*\n\n${message}`;
+          formattedMessage = `📢 <b>Pengumuman</b>\n\n${message}`;
           break;
         case "maintenance":
-          formattedMessage = `🔧 *Maintenance Notice*\n\n${message}`;
+          formattedMessage = `🔧 <b>Maintenance Notice</b>\n\n${message}`;
           break;
         default:
           formattedMessage = message;
@@ -261,8 +281,9 @@ class NotificationService {
     const icon = difference >= 0 ? "📈" : "📉";
     const action = difference >= 0 ? "bertambah" : "berkurang";
 
+    // UPDATED TO HTML FORMAT
     const message =
-      `${icon} *Token Update*\n\n` +
+      `${icon} <b>Token Update</b>\n\n` +
       `Token Reeru Anda ${action}:\n` +
       `• Sebelumnya: ${oldTokens} token\n` +
       `• Sekarang: ${newTokens} token\n` +
@@ -277,8 +298,9 @@ class NotificationService {
   static async sendWelcomeMessage(userId: string): Promise<boolean> {
     const user = await UserModel.getUserProfile(userId);
 
+    // UPDATED TO HTML FORMAT
     const message =
-      `🎉 *Selamat datang, ${user.name}!*\n\n` +
+      `🎉 <b>Selamat datang, ${user.name}!</b>\n\n` +
       `Akun Telegram Anda telah berhasil terhubung dengan Reeru.\n\n` +
       `Anda akan menerima notifikasi untuk:\n` +
       `🔔 Update penting akun\n` +
