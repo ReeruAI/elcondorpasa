@@ -49,9 +49,11 @@ export async function middleware(request: NextRequest) {
     // Special handling for email linking routes (no auth required)
     if (
       pathname === "/api/telegram/initiate-email-linking" ||
-      pathname === "/api/telegram/complete-email-linking"
+      pathname === "/api/telegram/complete-email-linking" ||
+      pathname === "/api/telegram/unlink" ||
+      pathname === "/api/telegram/check-status"
     ) {
-      console.log("📧 Email linking request - no auth required");
+      console.log("📧 Telegram API request - no auth required");
       return NextResponse.next();
     }
 
