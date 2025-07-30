@@ -42,6 +42,96 @@ interface UserDayCache {
 }
 
 /**
+ * Decode HTML entities in text
+ */
+function decodeHtmlEntities(text: string): string {
+  const entities: { [key: string]: string } = {
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+    "&apos;": "'",
+    "&#x27;": "'",
+    "&#x2F;": "/",
+    "&#x60;": "`",
+    "&#x3D;": "=",
+  };
+
+  return text.replace(/&[#\w]+;/g, (entity) => {
+    return entities[entity] || entity;
+  });
+}
+
+/**
+ * Check if content is likely from India based on various indicators
+ */
+function isLikelyIndianContent(video: any): boolean {
+  const indicators = [
+    // Hindi/Indian language indicators
+    "hindi",
+    "bollywood",
+    "desi",
+    "bharat",
+    "hindustan",
+    // Common Indian names/terms
+    "sharma",
+    "gupta",
+    "singh",
+    "kumar",
+    "verma",
+    "patel",
+    // Indian cities
+    "mumbai",
+    "delhi",
+    "bangalore",
+    "kolkata",
+    "chennai",
+    "hyderabad",
+    // Common Indian YouTube channel patterns
+    "india",
+    "indian",
+    "bharat",
+    "desi",
+    "hindustani",
+    // Hindi words commonly in titles
+    "aur",
+    "hai",
+    "mein",
+    "kya",
+    "kaise",
+    "kaun",
+    "jab",
+    "tak",
+  ];
+
+  const textToCheck =
+    `${video.title} ${video.creator} ${video.description}`.toLowerCase();
+
+  const indianScripts = [
+    /[\u0900-\u097F]/, // Devanagari (Hindi, Marathi, Sanskrit)
+    /[\u0980-\u09FF]/, // Bengali
+    /[\u0A00-\u0A7F]/, // Gurmukhi (Punjabi)
+    /[\u0A80-\u0AFF]/, // Gujarati
+    /[\u0B00-\u0B7F]/, // Odia
+    /[\u0B80-\u0BFF]/, // Tamil
+    /[\u0C00-\u0C7F]/, // Telugu
+    /[\u0C80-\u0CFF]/, // Kannada
+    /[\u0D00-\u0D7F]/, // Malayalam
+  ];
+
+  // Check for any Indian script
+  const hasIndianScript = indianScripts.some((script) =>
+    script.test(video.title + video.creator + (video.description || ""))
+  );
+
+  if (hasIndianScript) return true;
+
+  // Check for indicators
+  return indicators.some((indicator) => textToCheck.includes(indicator));
+}
+
+/**
  * Generate a cache key for content/language combination
  */
 function getPoolKey(
@@ -271,6 +361,10 @@ async function generateSearchQuery(
   languagePreference: string,
   modifier: string = ""
 ): Promise<string> {
+  // If Indonesian language is selected, don't add English terms
+  const excludeTerms =
+    languagePreference === "Indonesian" ? "" : "-hindi -india";
+
   const prompt = `Generate ONE concise YouTube search query for finding trending podcast content.
 
 Input:
@@ -282,10 +376,12 @@ Requirements:
 - Add 1-2 relevant trending keywords based on content preference
 - Keep it short (4-6 words max)
 - Focus on quality content creators if applicable
+- If language is not Indonesian, prefer international/western content
 
 Example outputs:
 - For Tech/English: "podcast 2025 ai startups"
 - For Entertainment/Indonesian: "podcast 2025 komedi indonesia"
+- For Business/English: "podcast 2025 entrepreneurship silicon valley"
 
 Return ONLY the search query, no explanation.`;
 
@@ -294,9 +390,13 @@ Return ONLY the search query, no explanation.`;
     contents: prompt,
   });
 
-  return (
-    response.text?.trim() || `podcast 2025 ${contentPreference.toLowerCase()}`
-  );
+  const baseQuery =
+    response.text?.trim() || `podcast 2025 ${contentPreference.toLowerCase()}`;
+
+  // Add exclusion terms if not Indonesian content
+  return languagePreference === "Indonesian"
+    ? baseQuery
+    : `${baseQuery} ${excludeTerms}`;
 }
 
 /**
@@ -323,10 +423,12 @@ async function searchYouTubeWithRelaxedCriteria(
   searchDate.setMonth(searchDate.getMonth() - monthsBack);
   const publishedAfter = searchDate.toISOString();
 
+  // Add region parameter to prefer non-Indian content
   const searchUrl =
     `https://www.googleapis.com/youtube/v3/search?` +
     `part=snippet&type=video&videoDuration=long&order=viewCount` +
     `&maxResults=${MAX_API_RESULTS}&publishedAfter=${publishedAfter}` +
+    `&regionCode=US` + // Add region code to get more international content
     `&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}`;
 
   const searchResponse = await fetch(searchUrl);
@@ -362,8 +464,8 @@ async function searchYouTubeWithRelaxedCriteria(
 
       return {
         videoId: video.id.videoId,
-        title: video.snippet.title,
-        creator: video.snippet.channelTitle,
+        title: decodeHtmlEntities(video.snippet.title), // DECODE HTML ENTITIES
+        creator: decodeHtmlEntities(video.snippet.channelTitle), // DECODE HTML ENTITIES
         thumbnailUrl:
           video.snippet.thumbnails.high?.url ||
           video.snippet.thumbnails.default.url,
@@ -372,14 +474,17 @@ async function searchYouTubeWithRelaxedCriteria(
         viewCount,
         durationMinutes,
         publishedAt: video.snippet.publishedAt,
-        description: video.snippet.description.substring(0, 200),
+        description: decodeHtmlEntities(
+          video.snippet.description.substring(0, 200)
+        ), // DECODE HTML ENTITIES
       };
     })
     .filter(
       (video: any) =>
         video.durationMinutes >= minDuration &&
         video.durationMinutes <= MAX_DURATION_MINUTES &&
-        video.viewCount >= minViews
+        video.viewCount >= minViews &&
+        !isLikelyIndianContent(video) // EXCLUDE INDIAN CONTENT
     );
 }
 
@@ -437,7 +542,7 @@ export async function* getYouTubeRecommendations(
   // Acquire lock to prevent race conditions
   const lockAcquired = await acquireUserLock(userId);
   if (!lockAcquired) {
-    yield `⏳ Another request is in progress. Please wait a moment and try again.\n`;
+    yield ` Another request is in progress. Please wait a moment and try again.\n`;
     return;
   }
 
@@ -448,18 +553,18 @@ export async function* getYouTubeRecommendations(
     // Check if we already served videos today (handles reroll case)
     const todayCache = await getUserTodayCache(userId);
     if (todayCache && todayCache.refreshCount >= DAILY_REFRESH_LIMIT) {
-      yield `📊 Daily limit reached. Returning your previous selection...\n\n`;
+      yield ` Daily limit reached. Returning your previous selection...\n\n`;
 
       // When refresh is exhausted, always return the last 5 videos
       // Don't filter by seen status - user explicitly wants their last selection
       const lastVideos = todayCache.videos.slice(-5);
 
       if (lastVideos.length === 0) {
-        yield `❌ No videos found in today's cache. This shouldn't happen!\n`;
+        yield ` No videos found in today's cache. This shouldn't happen!\n`;
         return;
       }
 
-      yield `🔄 Returning your last ${lastVideos.length} video recommendations.\n\n`;
+      yield ` Returning your last ${lastVideos.length} video recommendations.\n\n`;
 
       for (const video of lastVideos) {
         yield {
@@ -469,12 +574,12 @@ export async function* getYouTubeRecommendations(
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      yield `\n✅ These are your videos for today! Come back tomorrow for fresh content.\n`;
+      yield `\n These are your videos for today! Come back tomorrow for fresh content.\n`;
       return;
     }
 
     // Check refresh limit
-    yield `📊 Checking refresh limit for today...\n`;
+    yield ` Checking refresh limit for today...\n`;
     const { canRefresh, count } = await canUserRefresh(userId);
 
     if (!canRefresh) {
@@ -482,7 +587,7 @@ export async function* getYouTubeRecommendations(
       return;
     }
 
-    yield `✅ Refresh ${count + 1}/${DAILY_REFRESH_LIMIT} for today\n\n`;
+    yield ` Refresh ${count + 1}/${DAILY_REFRESH_LIMIT} for today\n\n`;
 
     // Get pool key and user's seen videos
     const poolKey = getPoolKey(contentPreference, languagePreference);
@@ -507,7 +612,7 @@ export async function* getYouTubeRecommendations(
       !videoPool || unseenVideos.length < POOL_REFRESH_THRESHOLD;
 
     if (needMoreVideos) {
-      yield `💫 Need more videos. Fetching fresh content...\n\n`;
+      yield ` Need more videos. Fetching fresh content...\n\n`;
 
       let searchAttempt = 1;
       let totalAnalyzedVideos: CachedVideo[] = [];
@@ -518,7 +623,7 @@ export async function* getYouTubeRecommendations(
         totalAnalyzedVideos.length < POOL_REFRESH_THRESHOLD
       ) {
         // Generate search query with variations
-        yield `🧠 Generating search query (attempt ${searchAttempt}/${MAX_SEARCH_ATTEMPTS})...\n`;
+        yield ` Generating search query (attempt ${searchAttempt}/${MAX_SEARCH_ATTEMPTS})...\n`;
 
         const queryModifiers = ["", "trending", "popular", "best", "viral"];
         const modifier = queryModifiers[searchAttempt - 1] || "";
@@ -528,17 +633,17 @@ export async function* getYouTubeRecommendations(
           languagePreference,
           modifier
         );
-        yield `✅ Search query: "${searchQuery}"\n\n`;
+        yield ` Search query: "${searchQuery}"\n\n`;
 
         // Search YouTube with progressively relaxed criteria
-        yield `🔍 Searching YouTube for trending podcasts...\n`;
+        yield ` Searching YouTube for trending podcasts...\n`;
         const searchResults = await searchYouTubeWithRelaxedCriteria(
           searchQuery,
           searchAttempt
         );
 
         if (searchAttempt > 1) {
-          yield `📉 Relaxed criteria: ${Math.max(
+          yield ` Relaxed criteria: ${Math.max(
             20,
             MIN_DURATION_MINUTES - searchAttempt * 5
           )}-${MAX_DURATION_MINUTES} minutes, ${Math.max(
@@ -547,15 +652,15 @@ export async function* getYouTubeRecommendations(
           ).toLocaleString()}+ views\n`;
         }
 
-        yield `✅ Found ${searchResults.length} videos matching criteria\n\n`;
+        yield ` Found ${searchResults.length} videos matching criteria\n\n`;
 
         if (searchResults.length === 0) {
           if (searchAttempt < MAX_SEARCH_ATTEMPTS) {
-            yield `🔄 No results. Trying with different criteria...\n\n`;
+            yield ` No results. Trying with different criteria...\n\n`;
             searchAttempt++;
             continue;
           } else {
-            yield `❌ No videos found after ${MAX_SEARCH_ATTEMPTS} attempts.\n`;
+            yield ` No videos found after ${MAX_SEARCH_ATTEMPTS} attempts.\n`;
             break;
           }
         }
@@ -565,15 +670,15 @@ export async function* getYouTubeRecommendations(
           (video) => !allSeenVideoIds.has(video.videoId)
         );
 
-        yield `🎯 Found ${newSearchResults.length} new videos you haven't seen\n\n`;
+        yield ` Found ${newSearchResults.length} new videos you haven't seen\n\n`;
 
         if (newSearchResults.length === 0) {
           if (searchAttempt < MAX_SEARCH_ATTEMPTS) {
-            yield `🔄 All videos already seen. Trying different search...\n\n`;
+            yield ` All videos already seen. Trying different search...\n\n`;
             searchAttempt++;
             continue;
           } else {
-            yield `⚠️ No new unique videos found.\n`;
+            yield ` No new unique videos found.\n`;
             break;
           }
         }
@@ -586,7 +691,7 @@ export async function* getYouTubeRecommendations(
         );
 
         // Analyze videos with Gemini
-        yield `🤖 Analyzing ${topVideos.length} videos for quality insights...\n\n`;
+        yield ` Analyzing ${topVideos.length} videos for quality insights...\n\n`;
 
         for (const video of topVideos) {
           // Skip if we already have enough
@@ -612,34 +717,34 @@ export async function* getYouTubeRecommendations(
           allSeenVideoIds.add(video.videoId);
         }
 
-        yield `✅ Analyzed ${totalAnalyzedVideos.length} total videos so far\n\n`;
+        yield ` Analyzed ${totalAnalyzedVideos.length} total videos so far\n\n`;
         searchAttempt++;
       }
 
       // Update cache with whatever we found
       if (totalAnalyzedVideos.length > 0) {
         if (!videoPool) {
-          yield `💾 Creating new video pool with ${totalAnalyzedVideos.length} videos...\n`;
+          yield ` Creating new video pool with ${totalAnalyzedVideos.length} videos...\n`;
           await cacheVideoPool(poolKey, totalAnalyzedVideos, "multi-search");
         } else {
-          yield `💾 Adding ${totalAnalyzedVideos.length} new videos to pool...\n`;
+          yield ` Adding ${totalAnalyzedVideos.length} new videos to pool...\n`;
           await appendToVideoPool(poolKey, totalAnalyzedVideos);
         }
       } else {
-        yield `❌ Unable to find any suitable videos for this preference combination.\n`;
-        yield `💡 Consider trying different preferences or checking back later.\n`;
+        yield ` Unable to find any suitable videos for this preference combination.\n`;
+        yield ` Consider trying different preferences or checking back later.\n`;
       }
 
       // Refresh our pool reference
       videoPool = await getCachedPool(poolKey);
-      yield `✅ Pool now contains ${videoPool?.videos.length || 0} videos\n\n`;
+      yield ` Pool now contains ${videoPool?.videos.length || 0} videos\n\n`;
 
       // Recalculate unseen videos
       unseenVideos = videoPool
         ? videoPool.videos.filter((video) => !seenVideoIds.has(video.videoId))
         : [];
     } else {
-      yield `🎯 Found ${unseenVideos.length} unseen videos in cache\n\n`;
+      yield ` Found ${unseenVideos.length} unseen videos in cache\n\n`;
     }
 
     // Select videos to return
@@ -647,14 +752,14 @@ export async function* getYouTubeRecommendations(
 
     // Handle insufficient unseen videos
     if (unseenVideos.length < VIDEOS_PER_REQUEST) {
-      yield `⚠️ Only ${unseenVideos.length} unseen videos available.\n`;
+      yield ` Only ${unseenVideos.length} unseen videos available.\n`;
 
       // Check if we can accept fewer videos
       if (unseenVideos.length >= MIN_ACCEPTABLE_VIDEOS) {
-        yield `📊 Proceeding with ${unseenVideos.length} videos (minimum ${MIN_ACCEPTABLE_VIDEOS} met).\n`;
+        yield ` Proceeding with ${unseenVideos.length} videos (minimum ${MIN_ACCEPTABLE_VIDEOS} met).\n`;
         videosToReturn = unseenVideos;
       } else {
-        yield `🔄 Attempting emergency search for more content...\n`;
+        yield ` Attempting emergency search for more content...\n`;
 
         // Try multiple emergency searches with very relaxed criteria
         const emergencyQueries = [
@@ -667,7 +772,7 @@ export async function* getYouTubeRecommendations(
         ];
 
         for (const emergencyQuery of emergencyQueries) {
-          yield `🆘 Emergency search: "${emergencyQuery}"\n`;
+          yield ` Emergency search: "${emergencyQuery}"\n`;
 
           // Search with very relaxed criteria
           const emergencyResults = await searchYouTubeWithRelaxedCriteria(
@@ -677,11 +782,12 @@ export async function* getYouTubeRecommendations(
           const newEmergencyVideos = emergencyResults.filter(
             (video) =>
               !seenVideoIds.has(video.videoId) &&
-              !unseenVideos.some((v) => v.videoId === video.videoId)
+              !unseenVideos.some((v) => v.videoId === video.videoId) &&
+              !isLikelyIndianContent(video) // EXCLUDE INDIAN CONTENT IN EMERGENCY SEARCH
           );
 
           if (newEmergencyVideos.length > 0) {
-            yield `✅ Found ${newEmergencyVideos.length} emergency videos\n`;
+            yield ` Found ${newEmergencyVideos.length} emergency videos\n`;
 
             // Quick analysis
             for (const video of newEmergencyVideos.slice(0, 5)) {
@@ -731,14 +837,14 @@ export async function* getYouTubeRecommendations(
     }
 
     if (finalVideos.length < videosToReturn.length) {
-      yield `🔍 Removed ${
+      yield ` Removed ${
         videosToReturn.length - finalVideos.length
       } duplicate(s) from selection.\n`;
     }
 
     if (finalVideos.length === 0) {
-      yield `❌ Unable to find any unique videos for this preference combination.\n`;
-      yield `\n💡 Suggestions:\n`;
+      yield ` Unable to find any unique videos for this preference combination.\n`;
+      yield `\n Suggestions:\n`;
       yield `• Try a different content preference\n`;
       yield `• Switch language preference\n`;
       yield `• Check back tomorrow for new content\n`;
@@ -754,11 +860,11 @@ export async function* getYouTubeRecommendations(
 
     // Warn if returning fewer than requested
     if (finalVideos.length < VIDEOS_PER_REQUEST) {
-      yield `\n⚠️ Note: Only ${finalVideos.length} unique videos available (requested ${VIDEOS_PER_REQUEST}).\n`;
+      yield `\n Note: Only ${finalVideos.length} unique videos available (requested ${VIDEOS_PER_REQUEST}).\n`;
       yield `This combination has limited content on YouTube.\n`;
     }
 
-    yield `\n🎬 Streaming ${finalVideos.length} personalized recommendations...\n\n`;
+    yield `\n Streaming ${finalVideos.length} personalized recommendations...\n\n`;
 
     // Stream videos
     for (const video of finalVideos) {
@@ -784,13 +890,13 @@ export async function* getYouTubeRecommendations(
     // Increment refresh count
     await incrementRefreshCount(userId);
 
-    yield `\n✅ Recommendations delivered successfully!\n`;
-    yield `📊 You've now seen ${
+    yield `\n Recommendations delivered successfully!\n`;
+    yield ` You've now seen ${
       seenVideoIds.size + returnedVideoIds.length
     } unique videos total\n`;
   } catch (error) {
     console.error("Recommendation error:", error);
-    yield `\n❌ Error: ${
+    yield `\n Error: ${
       error instanceof Error ? error.message : "Unknown error"
     }\n`;
     throw error;
