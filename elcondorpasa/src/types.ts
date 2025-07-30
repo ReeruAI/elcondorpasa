@@ -83,8 +83,13 @@ export interface Step {
 export interface PricingTier {
   name: string;
   tokens: number;
+  price: number;
   desc: string;
+  features: string[];
   popular: boolean;
+  icon: React.ElementType;
+  color: string;
+  bgGradient: string;
 }
 
 export interface Feature {
