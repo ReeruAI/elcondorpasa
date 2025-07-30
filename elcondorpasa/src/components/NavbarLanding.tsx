@@ -13,6 +13,7 @@ import {
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import axios from "axios";
 
 export default function NavbarLanding() {
   const [isVisible, setIsVisible] = useState(true);
@@ -153,10 +154,13 @@ export default function NavbarLanding() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      await axios.post(
+        "/api/logout",
+        {},
+        {
+          withCredentials: true,
+        }
+      );
 
       setIsLoggedIn(false);
       setIsDropdownOpen(false);

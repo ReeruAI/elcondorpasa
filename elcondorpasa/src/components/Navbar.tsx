@@ -242,10 +242,13 @@ export default function Navbar() {
       window.dispatchEvent(new Event("userLogout"));
 
       // Call logout API
-      await fetch("/api/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      await axios.post(
+        "/api/logout",
+        {},
+        {
+          withCredentials: true,
+        }
+      );
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
