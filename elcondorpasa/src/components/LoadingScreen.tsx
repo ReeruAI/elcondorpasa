@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 export default function LoadingScreen() {
   const [isLoading, setIsLoading] = useState(true);
@@ -74,7 +75,7 @@ export default function LoadingScreen() {
         <div className="mb-8 h-24 relative">
           {/* Container that holds both logo and text */}
           <div className="flex items-center justify-center h-full">
-            {/* SVG Logo with slide from top animation */}
+            {/* External SVG Logo with slide from top animation */}
             <div
               className={`transition-all duration-700 ease-out ${
                 logoAnimated
@@ -82,29 +83,13 @@ export default function LoadingScreen() {
                   : "-translate-y-20 opacity-0"
               }`}
             >
-              <svg
-                width="60"
-                height="60"
-                viewBox="0 0 60 60"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                {/* Black background rounded square */}
-                <rect
-                  x="0"
-                  y="0"
-                  width="60"
-                  height="60"
-                  rx="12"
-                  ry="12"
-                  fill="black"
-                />
-
-                {/* Abstract 'R' shape */}
-                <path d="M18 18 L18 42 L30 30 L18 30 Z" fill="white" />
-
-                {/* Play triangle */}
-                <polygon points="34,25 44,30 34,35" fill="white" />
-              </svg>
+              <Image
+                src="/logo.svg"
+                alt="Reeru AI Logo"
+                width={60}
+                height={60}
+                priority
+              />
             </div>
 
             {/* Text with slide from right animation */}
