@@ -125,6 +125,7 @@ export default function Navbar() {
   const navLinks = useMemo(
     () => [
       { href: "/dashboard", label: "Dashboard" },
+      { href: "/preferences", label: "Preferences" },
       { href: "/your-clip", label: "Your-clip" },
       { href: "/telegram-service", label: "Telegram Service" },
       { href: "/top-up", label: "Top-up" },
