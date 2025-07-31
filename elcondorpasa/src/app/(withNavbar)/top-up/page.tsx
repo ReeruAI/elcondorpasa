@@ -298,81 +298,181 @@ export default function TopUpPage() {
   // Use the token context
   const { addTokens } = useTokens();
 
-  // Load Midtrans Snap script
+  // Load Midtrans Snap script with better error handling
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src =
-      process.env.NODE_ENV === "production"
+    const loadMidtransScript = () => {
+      // Check if script already exists
+      const existingScript = document.querySelector('script[src*="snap.js"]');
+      if (existingScript) {
+        // Check if snap is actually loaded
+        if (window.snap && typeof window.snap.pay === "function") {
+          setIsSnapLoaded(true);
+        }
+        return;
+      }
+
+      const script = document.createElement("script");
+      const isProduction = process.env.NODE_ENV === "production";
+
+      script.src = isProduction
         ? "https://app.midtrans.com/snap/snap.js"
         : "https://app.sandbox.midtrans.com/snap/snap.js";
-    script.setAttribute(
-      "data-client-key",
-      process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || ""
-    );
-    script.async = true;
 
-    script.onload = () => {
-      console.log("Midtrans Snap loaded");
-      setIsSnapLoaded(true);
+      const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
+
+      if (!clientKey) {
+        console.error("Midtrans client key is missing");
+        setError("Payment configuration error. Please contact support.");
+        return;
+      }
+
+      script.setAttribute("data-client-key", clientKey);
+      script.async = true;
+      script.id = "midtrans-snap-script";
+
+      const timeout = setTimeout(() => {
+        setError(
+          "Payment system is taking too long to load. Please refresh the page."
+        );
+      }, 10000); // 10 second timeout
+
+      script.onload = () => {
+        clearTimeout(timeout);
+        console.log("Midtrans Snap loaded successfully");
+
+        // Double check that window.snap is available
+        if (window.snap && typeof window.snap.pay === "function") {
+          setIsSnapLoaded(true);
+          setError(""); // Clear any previous errors
+        } else {
+          console.error("Snap loaded but not available on window");
+          setError("Payment system loaded but not initialized properly.");
+        }
+      };
+
+      script.onerror = () => {
+        clearTimeout(timeout);
+        console.error("Failed to load Midtrans Snap");
+        setError(
+          "Failed to load payment system. Please check your internet connection and refresh the page."
+        );
+      };
+
+      document.body.appendChild(script);
     };
 
-    script.onerror = () => {
-      console.error("Failed to load Midtrans Snap");
-      setError("Failed to load payment system. Please refresh the page.");
-    };
-
-    document.body.appendChild(script);
+    // Add a small delay to ensure the page is fully loaded
+    const timer = setTimeout(loadMidtransScript, 100);
 
     return () => {
-      if (script.parentNode) {
-        document.body.removeChild(script);
-      }
+      clearTimeout(timer);
     };
   }, []);
+
+  // Debug logging for production
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") {
+      console.log("Production environment check:", {
+        hasClientKey: !!process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY,
+        clientKeyLength:
+          process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.length || 0,
+        nodeEnv: process.env.NODE_ENV,
+        snapLoaded: isSnapLoaded,
+        windowSnapExists: !!window.snap,
+        windowSnapPayExists: !!(window.snap && window.snap.pay),
+      });
+    }
+  }, [isSnapLoaded]);
 
   const checkTransactionStatus = useCallback(
     async (orderId: string, pkg: Package) => {
       let attempts = 0;
       const maxAttempts = 20;
+      let intervalId: NodeJS.Timeout | null = null;
 
       const check = async () => {
         try {
           const statusResponse = await axios.get(
-            `/api/transaction/status?orderId=${orderId}`
+            `/api/transaction/status?orderId=${orderId}`,
+            {
+              timeout: 15000, // 15 second timeout
+              validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+            }
           );
 
-          if (statusResponse.data.status === "paid") {
+          if (statusResponse.status === 404) {
+            // Transaction might not be created yet, keep checking
+            if (attempts < 3) {
+              attempts++;
+              return;
+            }
+          }
+
+          if (
+            statusResponse.data.status === "paid" ||
+            statusResponse.data.status === "settlement"
+          ) {
             if (pkg.reeruToken) {
               addTokens(pkg.reeruToken);
             }
             setShowSuccess(true);
             setError("");
+            if (intervalId) clearInterval(intervalId);
           } else if (
             statusResponse.data.status === "failed" ||
-            statusResponse.data.status === "expired"
+            statusResponse.data.status === "expired" ||
+            statusResponse.data.status === "deny"
           ) {
-            // No-op
-          } else if (
-            statusResponse.data.status === "pending" &&
-            attempts < maxAttempts
-          ) {
-            attempts++;
-            setTimeout(check, 5000);
+            setError("Transaction was not completed. Please try again.");
+            if (intervalId) clearInterval(intervalId);
+          } else if (attempts >= maxAttempts) {
+            setError(
+              "Transaction verification timeout. Please check your payment status or contact support."
+            );
+            if (intervalId) clearInterval(intervalId);
           }
+
+          attempts++;
         } catch (err) {
           console.error("Status check error:", err);
+          attempts++;
+
+          if (attempts >= maxAttempts) {
+            setError(
+              "Unable to verify payment status. Please contact support if you were charged."
+            );
+            if (intervalId) clearInterval(intervalId);
+          }
         }
       };
 
+      // Initial check after 3 seconds
       setTimeout(check, 3000);
+
+      // Then check every 5 seconds
+      intervalId = setInterval(check, 5000);
+
+      // Clean up interval after max time
+      setTimeout(() => {
+        if (intervalId) clearInterval(intervalId);
+      }, maxAttempts * 5000);
     },
-    [addTokens, setShowSuccess, setError]
+    [addTokens]
   );
 
   const handlePackageSelect = useCallback(
     async (pkg: Package) => {
       if (!isSnapLoaded) {
-        setError("Payment system is still loading. Please try again.");
+        setError(
+          "Payment system is still loading. Please wait a moment and try again."
+        );
+        return;
+      }
+
+      if (!window.snap || typeof window.snap.pay !== "function") {
+        setError(
+          "Payment system is not properly initialized. Please refresh the page."
+        );
         return;
       }
 
@@ -381,9 +481,27 @@ export default function TopUpPage() {
       setSelectedPackage(pkg);
 
       try {
-        const response = await axios.post<MidtransResponse>("/api/midtrans", {
-          package_id: pkg.id,
-        });
+        // Configure axios defaults for production
+        const axiosConfig = {
+          timeout: 30000, // 30 second timeout
+          headers: {
+            "Content-Type": "application/json",
+          },
+        };
+
+        const response = await axios.post<MidtransResponse>(
+          "/api/midtrans",
+          { package_id: pkg.id },
+          axiosConfig
+        );
+
+        if (
+          !response.data ||
+          !response.data.data ||
+          !response.data.data.token
+        ) {
+          throw new Error("Invalid response from payment server");
+        }
 
         const { token, order_id } = response.data.data;
 
@@ -397,6 +515,7 @@ export default function TopUpPage() {
             }
             setShowSuccess(true);
             setIsLoading(false);
+            setError("");
           },
           onPending: function (result: SnapResult) {
             console.log("Payment pending:", result);
@@ -408,7 +527,9 @@ export default function TopUpPage() {
           },
           onError: function (result: SnapResult) {
             console.log("Payment error:", result);
-            setError("Payment failed. Please try again.");
+            setError(
+              result.status_message || "Payment failed. Please try again."
+            );
             setIsLoading(false);
           },
           onClose: function () {
@@ -420,8 +541,45 @@ export default function TopUpPage() {
           },
         });
       } catch (err) {
-        console.error("Payment error:", err);
-        setError("Failed to initiate payment. Please try again.");
+        console.error("Payment error details:", err);
+
+        let errorMessage = "Failed to initiate payment. Please try again.";
+
+        if (axios.isAxiosError(err)) {
+          if (err.code === "ECONNABORTED") {
+            errorMessage =
+              "Request timeout. Please check your internet connection and try again.";
+          } else if (err.response) {
+            switch (err.response.status) {
+              case 400:
+                errorMessage =
+                  "Invalid request. Please refresh the page and try again.";
+                break;
+              case 401:
+                errorMessage = "Authentication error. Please refresh the page.";
+                break;
+              case 404:
+                errorMessage =
+                  "Payment service not found. Please contact support.";
+                break;
+              case 500:
+              case 502:
+              case 503:
+                errorMessage =
+                  "Server error. Please try again in a few moments.";
+                break;
+              default:
+                errorMessage = err.response.data?.message || errorMessage;
+            }
+          } else if (err.request) {
+            errorMessage =
+              "Network error. Please check your internet connection.";
+          }
+        } else if (err instanceof Error) {
+          errorMessage = err.message;
+        }
+
+        setError(errorMessage);
         setIsLoading(false);
       }
     },
@@ -473,21 +631,21 @@ export default function TopUpPage() {
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="max-w-md mx-auto mb-8 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl backdrop-blur-sm flex items-center gap-2"
+                className="max-w-md mx-auto mb-8 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl backdrop-blur-sm flex items-start gap-2"
               >
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {error}
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span className="text-sm">{error}</span>
               </motion.div>
             )}
 
-            {!isSnapLoaded && (
+            {!isSnapLoaded && !error && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="max-w-md mx-auto mb-8 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-4 py-3 rounded-xl backdrop-blur-sm flex items-center gap-2"
               >
                 <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-                Loading payment system...
+                <span className="text-sm">Loading payment system...</span>
               </motion.div>
             )}
 
@@ -511,6 +669,7 @@ export default function TopUpPage() {
             setShowSuccess(false);
             setIsLoading(false);
             setSelectedPackage(null);
+            setError("");
           }}
           packageName={selectedPackage?.name || ""}
         />
