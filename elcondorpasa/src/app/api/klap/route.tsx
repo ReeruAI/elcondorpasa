@@ -848,16 +848,19 @@ export async function POST(request: NextRequest) {
           console.log("🏁 Clearing processing flag and closing stream");
           await clearProcessingFlag();
           controller.close();
+          streamClosed = true;
         } catch (error) {
           console.error("❌ Stream error:", error);
-          await sendUpdate({
-            status: "error",
-            message: "Internal server error occurred",
-            error: error instanceof Error ? error.message : String(error),
-          });
-          await clearProcessingFlag();
-          controller.close();
-          streamClosed = true;
+          if (!streamClosed) {
+            await sendUpdate({
+              status: "error",
+              message: "Internal server error occurred",
+              error: error instanceof Error ? error.message : String(error),
+            });
+            await clearProcessingFlag();
+            controller.close();
+            streamClosed = true;
+          }
         }
       },
     });
