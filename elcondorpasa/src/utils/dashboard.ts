@@ -1,7 +1,7 @@
 import { TrendingVideo } from "@/types";
 
 // Helper function to format view count
-export const formatViewCount = (viewCount: any): string => {
+export const formatViewCount = (viewCount: string | number): string => {
   if (typeof viewCount === "number") {
     if (viewCount > 1000000) return (viewCount / 1000000).toFixed(1) + "M";
     if (viewCount > 1000) return (viewCount / 1000).toFixed(1) + "K";
@@ -10,13 +10,30 @@ export const formatViewCount = (viewCount: any): string => {
   return viewCount;
 };
 
+// Define a type for the video input object
+interface VideoInput {
+  videoUrl?: string;
+  id?: string;
+  title: string;
+  thumbnailUrl?: string;
+  thumbnail?: string;
+  reasoning?: string;
+  description?: string;
+  url?: string;
+  viewCount?: string | number;
+  views?: string | number;
+  duration?: string;
+  creator?: string;
+  channel?: string;
+}
+
 // Helper function to convert video data
-export const convertToTrendingVideo = (video: any): TrendingVideo => ({
+export const convertToTrendingVideo = (video: VideoInput): TrendingVideo => ({
   id: video.videoUrl?.split("v=")[1] || video.id || Math.random().toString(),
   title: video.title,
-  thumbnail: video.thumbnailUrl || video.thumbnail,
+  thumbnail: video.thumbnailUrl || video.thumbnail || "",
   description: video.reasoning || video.description || "",
-  url: video.videoUrl || video.url,
+  url: video.videoUrl || video.url || "",
   views: formatViewCount(video.viewCount || video.views || "0"),
   duration: video.duration || "0:00",
   channel: video.creator || video.channel || "Unknown",

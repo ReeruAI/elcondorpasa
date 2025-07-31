@@ -145,6 +145,8 @@ export default function Navbar() {
   // Optimized scroll handler - fixes blinking
   useEffect(() => {
     let ticking = false;
+    // Store the timeout ref value in a variable inside the effect
+    const scrollTimeout: NodeJS.Timeout | null = null;
 
     const handleScroll = () => {
       if (!ticking) {
@@ -152,8 +154,8 @@ export default function Navbar() {
           const currentScrollY = window.scrollY;
 
           // Clear any existing timeout
-          if (scrollTimeoutRef.current) {
-            clearTimeout(scrollTimeoutRef.current);
+          if (scrollTimeout) {
+            clearTimeout(scrollTimeout);
           }
 
           // Only hide navbar when scrolling down past threshold
@@ -167,7 +169,6 @@ export default function Navbar() {
           }
 
           lastScrollRef.current = currentScrollY;
-          // setScrollY(currentScrollY);
           ticking = false;
         });
         ticking = true;
@@ -175,10 +176,15 @@ export default function Navbar() {
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
+
+    // Update the ref with our local variable
+    scrollTimeoutRef.current = scrollTimeout;
+
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
+      // Use the local variable in cleanup, not the ref
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
       }
     };
   }, []);

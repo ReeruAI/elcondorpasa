@@ -1,4 +1,4 @@
-import { RefObject, useState, useEffect } from "react";
+import { RefObject, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -52,13 +52,13 @@ export const VideoCarousel: React.FC<VideoCarouselProps> = ({
   const [canScrollRight, setCanScrollRight] = useState(true);
 
   // Check scroll position to enable/disable buttons
-  const checkScrollPosition = () => {
+  const checkScrollPosition = useCallback(() => {
     if (sliderRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = sliderRef.current;
       setCanScrollLeft(scrollLeft > 0);
       setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
     }
-  };
+  }, [sliderRef]);
 
   useEffect(() => {
     const slider = sliderRef.current;
@@ -75,7 +75,7 @@ export const VideoCarousel: React.FC<VideoCarouselProps> = ({
         resizeObserver.disconnect();
       };
     }
-  }, [sliderRef, videos]);
+  }, [sliderRef, videos, checkScrollPosition]);
 
   // Mouse drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
