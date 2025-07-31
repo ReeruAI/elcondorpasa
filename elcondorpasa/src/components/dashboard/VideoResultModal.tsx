@@ -10,7 +10,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import DownloadButton from "@/components/DownloadButton";
 import { useYouTubeIntegration } from "@/hooks/useYouTubeIntegration";
 
@@ -45,7 +44,6 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
   videoData,
 }) => {
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
-  const router = useRouter();
 
   const {
     isConnected: isYouTubeConnected,
@@ -68,7 +66,7 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
     if (score >= 60)
       return { color: "text-yellow-400", text: "Good potential" };
     return { color: "text-orange-400", text: "Moderate potential" };
-  }, [videoData?.virality_score]);
+  }, [videoData]);
 
   const handleUpload = useCallback(() => {
     if (videoData) {

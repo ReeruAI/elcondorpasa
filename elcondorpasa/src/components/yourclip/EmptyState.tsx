@@ -15,7 +15,7 @@ const EmptyState: React.FC = () => {
       </div>
       <h3 className="text-2xl font-semibold text-white mb-3">No Clips Yet</h3>
       <p className="text-gray-400 max-w-md">
-        Start creating viral shorts and they'll appear here. Your video
+        Start creating viral shorts and they&apos;ll appear here. Your video
         collection is waiting to be filled!
       </p>
     </motion.div>
