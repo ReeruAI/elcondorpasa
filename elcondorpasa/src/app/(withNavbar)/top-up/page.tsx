@@ -446,6 +446,11 @@ export default function TopUpPage() {
     setTimeout(check, 3000);
   };
 
+  useEffect(() => {
+    const title = `ReeruAI - Top up`;
+    document.title = title;
+  }, []);
+
   return (
     <>
       <div className="min-h-screen relative bg-[#1D1D1D] overflow-hidden">

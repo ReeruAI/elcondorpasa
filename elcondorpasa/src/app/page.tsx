@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import React from "react";
 import { motion } from "motion/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Play,
   Zap,
@@ -323,6 +323,15 @@ export default function Home() {
   const handleRegisterClick = () => {
     router.push("/register");
   };
+
+  const pathname = usePathname();
+  useEffect(() => {
+    const currentPath = pathname.split("/")[1];
+    const title = `ReeruAI - Making Short Easier${
+      currentPath.charAt(0).toUpperCase() + currentPath.slice(1)
+    }`;
+    document.title = title;
+  }, [pathname]);
 
   return (
     <>

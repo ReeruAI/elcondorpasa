@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import axios, { AxiosError } from "axios";
 import {
@@ -401,6 +401,15 @@ export default function RegisterPage() {
     },
     [formData, handleAuthResponse, handleAuthError]
   );
+
+  const pathname = usePathname();
+  useEffect(() => {
+    const currentPath = pathname.split("/")[1];
+    const title = `ReeruAI - ${
+      currentPath.charAt(0).toUpperCase() + currentPath.slice(1)
+    }`;
+    document.title = title;
+  }, [pathname]);
 
   return (
     <div className="min-h-screen relative bg-gradient-to-b from-[#1D1D1D] to-black overflow-hidden">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { TrendingUp, Loader2, History } from "lucide-react";
@@ -741,6 +741,15 @@ export default function Dashboard() {
     setSelectedVideo(video);
     setShowOptionsModal(true);
   };
+
+  const pathname = usePathname();
+  useEffect(() => {
+    const currentPath = pathname.split("/")[1];
+    const title = `ReeruAI - ${
+      currentPath.charAt(0).toUpperCase() + currentPath.slice(1)
+    }`;
+    document.title = title;
+  }, [pathname]);
 
   const displayVideos =
     showVideos || hasLoadedRecommendations

@@ -145,6 +145,11 @@ export default function OTPTestPage() {
     testGetStatus();
   }, []);
 
+  useEffect(() => {
+    const title = `ReeruAI - Telegram Service`;
+    document.title = title;
+  }, []);
+
   return (
     <div className="min-h-screen relative bg-gradient-to-b from-[#1D1D1D] to-black overflow-hidden">
       {/* Background Effects */}

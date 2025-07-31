@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { StrictMode } from "react";
-
 import { Inter } from "next/font/google";
 
 const inter = Inter({
@@ -9,10 +8,14 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-export const metadata: Metadata = {
-  title: "ReeruAI",
-  description: "ReeruAI - Making Short Easier",
-};
+// Remove the static metadata export and usePathname hook
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: "ReeruAI", // Default title
+    description: "ReeruAI - Making Short Easier",
+  };
+}
 
 export default function RootLayout({
   children,
