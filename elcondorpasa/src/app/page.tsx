@@ -28,6 +28,7 @@ import { Feature, PricingTier, Stat, Step, Testimonial } from "@/types";
 import NavbarLanding from "@/components/NavbarLanding";
 import CursorGlow from "@/components/CursorGlow";
 import ParticleBackground from "@/components/yourclip/ParticleBackground";
+import Footer from "@/components/Footer";
 
 // TypeScript interfaces
 interface FadeInViewProps extends React.ComponentProps<typeof motion.div> {
@@ -871,6 +872,8 @@ export default function Home() {
                 </FadeInView>
               </div>
             </section>
+            {/* Footer */}
+            <Footer />
           </div>
         </div>
       </Suspense>
