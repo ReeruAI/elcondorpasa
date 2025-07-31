@@ -342,47 +342,200 @@ function formatDuration(duration: string): string {
 /**
  * Generate smart search query using preferences
  */
+/**
+ * Generate smart search query using preferences with proper language support
+ */
+/**
+ * Generate smart search query using preferences with proper language support
+ */
 async function generateSearchQuery(
   contentPreference: string,
   languagePreference: string,
   modifier: string = ""
 ): Promise<string> {
-  // If Indonesian language is selected, don't add English terms
-  const excludeTerms =
-    languagePreference === "Indonesian" ? "" : "-hindi -india";
+  // Language-specific translations and terms
+  const translations = {
+    Indonesian: {
+      contentMap: {
+        Technology: "teknologi",
+        Science: "sains",
+        Business: "bisnis",
+        Entertainment: "hiburan",
+        Education: "edukasi",
+        Health: "kesehatan",
+        Sports: "olahraga",
+        Politics: "politik",
+        News: "berita",
+        Finance: "keuangan",
+        Lifestyle: "gaya hidup",
+        Travel: "traveling",
+        Food: "kuliner",
+        Gaming: "gaming",
+        Music: "musik",
+        Art: "seni",
+        History: "sejarah",
+        Culture: "budaya",
+        Religion: "agama",
+      },
+      modifierMap: {
+        trending: "viral",
+        popular: "populer",
+        best: "terbaik",
+        viral: "viral",
+        latest: "terbaru",
+        top: "teratas",
+      },
+      baseTerms: ["podcast", "2024", "2025", "indonesia"],
+      excludeTerms: "",
+    },
+    English: {
+      contentMap: {
+        Technology: "technology",
+        Science: "science",
+        Business: "business",
+        Entertainment: "entertainment",
+        Education: "education",
+        Health: "health",
+        Sports: "sports",
+        Politics: "politics",
+        News: "news",
+        Finance: "finance",
+        Lifestyle: "lifestyle",
+        Travel: "travel",
+        Food: "food",
+        Gaming: "gaming",
+        Music: "music",
+        Art: "art",
+        History: "history",
+        Culture: "culture",
+        Religion: "religion",
+      },
+      modifierMap: {
+        trending: "trending",
+        popular: "popular",
+        best: "best",
+        viral: "viral",
+        latest: "latest",
+        top: "top",
+      },
+      baseTerms: ["podcast", "2025"],
+      excludeTerms: "-hindi -india -bollywood",
+    },
+  };
 
-  const prompt = `Generate ONE concise YouTube search query for finding trending podcast content.
+  // Get language-specific configuration
+  const langConfig =
+    translations[languagePreference as keyof typeof translations] ||
+    translations.English;
+
+  // Translate content preference if available
+  const translatedContent =
+    langConfig.contentMap[
+      contentPreference as keyof typeof langConfig.contentMap
+    ] || contentPreference.toLowerCase();
+
+  // Translate modifier if available
+  const translatedModifier = modifier
+    ? langConfig.modifierMap[modifier as keyof typeof langConfig.modifierMap] ||
+      modifier
+    : "";
+
+  // Build the prompt dynamically based on language
+  let prompt: string;
+
+  if (
+    languagePreference.toLowerCase() === "indonesian" ||
+    languagePreference.toLowerCase() === "indonesia"
+  ) {
+    prompt = `Buat SATU query pencarian YouTube yang ringkas untuk menemukan konten podcast trending.
 
 Input:
-- Content: ${contentPreference} ${modifier}
-- Language: ${languagePreference}
+- Konten: ${translatedContent}${
+      translatedModifier ? ` ${translatedModifier}` : ""
+    }
+- Bahasa: Indonesia
+
+Persyaratan:
+- Sertakan "podcast 2025" atau "podcast indonesia" dalam query
+- Tambahkan 1-2 kata kunci trending yang relevan berdasarkan preferensi konten
+- Tetap singkat (4-6 kata maksimal)
+- Fokus pada kreator konten Indonesia berkualitas
+- Gunakan bahasa Indonesia untuk istilah-istilah
+
+Contoh output:
+- Untuk teknologi: "podcast 2025 teknologi indonesia"
+- Untuk hiburan: "podcast indonesia hiburan komedi"
+- Untuk bisnis: "podcast bisnis entrepreneur indonesia"
+
+Kembalikan HANYA query pencarian, tanpa penjelasan.`;
+  } else {
+    prompt = `Generate ONE concise YouTube search query for finding trending podcast content.
+
+Input:
+- Content: ${translatedContent}${
+      translatedModifier ? ` ${translatedModifier}` : ""
+    }
+- Language: English
 
 Requirements:
 - Include "podcast 2025" in the query
 - Add 1-2 relevant trending keywords based on content preference
 - Keep it short (4-6 words max)
-- Focus on quality content creators if applicable
-- If language is not Indonesian, prefer international/western content
+- Focus on quality international/western content creators
+- Prefer English-speaking creators and content
 
 Example outputs:
-- For Tech/English: "podcast 2025 ai startups"
-- For Entertainment/Indonesian: "podcast 2025 komedi indonesia"
-- For Business/English: "podcast 2025 entrepreneurship silicon valley"
+- For technology: "podcast 2025 ai startups"
+- For entertainment: "podcast 2025 comedy interviews"
+- For business: "podcast 2025 entrepreneurship silicon valley"
 
 Return ONLY the search query, no explanation.`;
+  }
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash-exp",
-    contents: prompt,
-  });
+  // Log the language preference and prompt for debugging
+  console.log(`Language Preference: ${languagePreference}`);
+  console.log(`Translated Content: ${translatedContent}`);
+  console.log(`Translated Modifier: ${translatedModifier}`);
+  console.log("Generated prompt for Gemini:", prompt);
 
-  const baseQuery =
-    response.text?.trim() || `podcast 2025 ${contentPreference.toLowerCase()}`;
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
 
-  // Add exclusion terms if not Indonesian content
-  return languagePreference === "Indonesian"
-    ? baseQuery
-    : `${baseQuery} ${excludeTerms}`;
+    const generatedQuery = response.text?.trim();
+    console.log(`Generated query from AI: ${generatedQuery}`);
+
+    if (generatedQuery) {
+      // Add exclusion terms for non-Indonesian content
+      const finalQuery =
+        languagePreference.toLowerCase() === "indonesian" ||
+        languagePreference.toLowerCase() === "indonesia"
+          ? generatedQuery
+          : `${generatedQuery} ${langConfig.excludeTerms}`;
+
+      console.log(`Final query: ${finalQuery}`);
+      return finalQuery;
+    }
+  } catch (error) {
+    console.error("Error generating search query:", error);
+  }
+
+  // Fallback query construction
+  const fallbackTerms = [
+    ...langConfig.baseTerms,
+    translatedContent,
+    translatedModifier,
+  ].filter(Boolean);
+
+  const fallbackQuery = fallbackTerms.join(" ");
+  console.log(`Using fallback query: ${fallbackQuery}`);
+
+  return languagePreference.toLowerCase() === "indonesian" ||
+    languagePreference.toLowerCase() === "indonesia"
+    ? fallbackQuery
+    : `${fallbackQuery} ${langConfig.excludeTerms}`;
 }
 
 /**
@@ -414,7 +567,6 @@ async function searchYouTubeWithRelaxedCriteria(
     `https://www.googleapis.com/youtube/v3/search?` +
     `part=snippet&type=video&videoDuration=long&order=viewCount` +
     `&maxResults=${MAX_API_RESULTS}&publishedAfter=${publishedAfter}` +
-    `&regionCode=US` + // Add region code to get more international content
     `&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}`;
 
   const searchResponse = await fetch(searchUrl);
@@ -753,7 +905,7 @@ export async function* getYouTubeRecommendations(
         const emergencyQueries = [
           `${contentPreference} podcast discussion`,
           `podcast ${
-            languagePreference === "Indonesian" ? "indonesia" : "english"
+            languagePreference === "indonesian" ? "indonesia" : "english"
           } talk`,
           `${contentPreference} interview show`,
           `trending podcast ${new Date().getFullYear()}`,

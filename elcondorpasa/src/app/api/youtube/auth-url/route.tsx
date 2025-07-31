@@ -7,10 +7,6 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.YOUTUBE_REDIRECT_URI
 );
 
-console.log("YOUTUBE_CLIENT_ID:", process.env.YOUTUBE_CLIENT_ID);
-console.log("YOUTUBE_CLIENT_SECRET:", process.env.YOUTUBE_CLIENT_SECRET);
-console.log("YOUTUBE_REDIRECT_URI:", process.env.YOUTUBE_REDIRECT_URI);
-
 export async function GET(request: NextRequest) {
   try {
     // Get userId from your middleware (passed in headers)
