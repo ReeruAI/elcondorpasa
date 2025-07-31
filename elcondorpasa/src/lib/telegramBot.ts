@@ -133,7 +133,7 @@ if (shouldInitialize) {
       try {
         // Send initial processing message
         console.log(
-          `📹 Processing video: ${videoUrl} for chatId: ${chatId} userId: ${userId}`
+          `🔄 Processing video for chatId: ${chatId}, userId: ${userId}`
         );
         if (bot) {
           await bot.sendMessage(
@@ -193,7 +193,7 @@ if (shouldInitialize) {
                 // For now, we'll just wait for the final result
               } catch (e) {
                 // Ignore parse errors
-                console.error("❌ Error parsing SSE data:", e);
+                console.log("❌ Error parsing SSE data:", e);
               }
             }
           }
@@ -328,7 +328,7 @@ if (shouldInitialize) {
       const message = query.message as Message;
       const chatId = message.chat.id;
       const data = query.data || "";
-      const messageId = message.message_id;
+      const _messageId = message.message_id;
       const userId = query.from.id;
       const userName = query.from.first_name;
 
@@ -339,22 +339,13 @@ if (shouldInitialize) {
 
         try {
           if (bot) {
+            // Answer the callback query to remove the loading state on the button
             await bot.answerCallbackQuery(query.id, {
               text: "🎬 Processing your video...",
               show_alert: false,
             });
 
-            await bot.sendMessage(
-              chatId,
-              `🎬 *Generating Short/Reel*\n\n` +
-                `Processing video:\n${videoUrl}\n\n` +
-                `⏳ This may take a moment. We'll notify you when it's ready!`,
-              {
-                parse_mode: "Markdown",
-                reply_to_message_id: messageId,
-              }
-            );
-
+            // Don't send a message here - let processVideoWithKlap handle all messaging
             await processVideoWithKlap(videoUrl, chatId, String(userId));
           }
         } catch (error: unknown) {
@@ -379,7 +370,6 @@ if (shouldInitialize) {
         }
       }
     });
-
     // Handle incoming messages - Email → OTP Flow
     bot.on("message", async (msg: Message) => {
       const chatId = msg.chat.id;
