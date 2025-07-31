@@ -4,6 +4,7 @@ import TelegramBot from "node-telegram-bot-api";
 import axios, { AxiosError } from "axios";
 import type { CallbackQuery, Message } from "node-telegram-bot-api";
 import type CronServiceType from "@/lib/cronService";
+import KlapModel from "@/db/models/KlapModel";
 
 // Type definitions for SSE data
 interface SSEBaseData {
@@ -90,6 +91,22 @@ interface UnlinkResponse {
   };
 }
 
+// Type for database short
+interface DatabaseShort {
+  id: string;
+  title: string;
+  virality_score: number;
+  description?: string;
+  captions?: {
+    tiktok?: string;
+    youtube?: string;
+    linkedin?: string;
+    instagram?: string;
+  };
+  download_url?: string;
+  created_at: string | Date;
+}
+
 // Prevent initialization during build or in non-runtime environments
 const shouldInitialize =
   process.env.NEXT_RUNTIME === "nodejs" &&
@@ -120,6 +137,75 @@ if (shouldInitialize) {
     // Store user states (in production, use Redis or database)
     const userStates = new Map<number, UserState>();
 
+    // Helper function to send success messages
+    const sendSuccessMessages = async (
+      chatId: number,
+      videoUrl: string,
+      short: {
+        id?: string;
+        title: string;
+        virality_score: number;
+        description?: string;
+        captions?:
+          | {
+              tiktok?: string;
+              youtube?: string;
+              linkedin?: string;
+              instagram?: string;
+            }
+          | string;
+        download_url?: string;
+      },
+      tokensRemaining: number
+    ): Promise<void> => {
+      if (!bot) return;
+
+      // Extract caption string
+      let captionText = "No caption generated";
+      if (typeof short.captions === "string") {
+        captionText = short.captions;
+      } else if (short.captions?.tiktok) {
+        captionText = short.captions.tiktok;
+      }
+
+      // Send success message with video details
+      const completionMessage =
+        `✅ *Video Ready!*\n\n` +
+        `🎬 *Title:* ${short.title}\n` +
+        `🎯 *Virality Score:* ${short.virality_score}/100\n` +
+        `💡 *Analysis:*\n_${
+          short.description || "No analysis available"
+        }_\n\n` +
+        `📝 *Caption suggestion:*\n${captionText}\n\n` +
+        `🪙 *Tokens remaining:* ${tokensRemaining}\n\n` +
+        `🌐 *View your short:* [Open Dashboard](${
+          process.env.API_BASE_URL || "http://localhost:3000"
+        }/your-clip)\n` +
+        `🔗 *Original:* [View on YouTube](${videoUrl})`;
+
+      await bot.sendMessage(chatId, completionMessage, {
+        parse_mode: "Markdown",
+        disable_web_page_preview: true,
+      });
+
+      // Send download link message
+      await bot.sendMessage(
+        chatId,
+        `🎉 *Success!*\n\n` +
+          `Your short "${short.title}" is ready!\n\n` +
+          `📱 *View & Download:* [${
+            process.env.API_BASE_URL || "http://localhost:3000"
+          }/your-clip](${
+            process.env.API_BASE_URL || "http://localhost:3000"
+          }/your-clip)\n\n` +
+          `💾 *Direct download:* ${short.download_url || "Not available"}`,
+        {
+          parse_mode: "Markdown",
+          disable_web_page_preview: false,
+        }
+      );
+    };
+
     // Helper function to process video with Klap API
     const processVideoWithKlap = async (
       videoUrl: string,
@@ -129,6 +215,9 @@ if (shouldInitialize) {
       const API_URL = `${
         process.env.API_BASE_URL || "http://localhost:3000"
       }/api/klap`;
+
+      // Store the start time to identify the video later
+      const processingStartTime = Date.now();
 
       try {
         // Send initial processing message
@@ -172,31 +261,42 @@ if (shouldInitialize) {
         let lastData: SSEData | null = null;
         let buffer = "";
 
-        // Read the entire stream
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        try {
+          // Read the entire stream
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
+            buffer += decoder.decode(value, { stream: true });
 
-          // Process complete SSE messages
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep incomplete line in buffer
+            // Process complete SSE messages
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6)) as SSEData;
-                lastData = data; // Keep track of the last data
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                try {
+                  const data = JSON.parse(line.slice(6)) as SSEData;
+                  lastData = data; // Keep track of the last data
 
-                // You can optionally send intermediate updates here if needed
-                // For now, we'll just wait for the final result
-              } catch (e) {
-                // Ignore parse errors
-                console.log("❌ Error parsing SSE data:", e);
+                  // Log progress for debugging
+                  if (data.status) {
+                    console.log(
+                      `📊 Status: ${data.status}, Progress: ${
+                        data.progress || "N/A"
+                      }`
+                    );
+                  }
+                } catch (e) {
+                  // Ignore parse errors
+                  console.log("❌ Error parsing SSE data:", e);
+                }
               }
             }
           }
+        } catch (streamError) {
+          console.log("⚠️ Stream interrupted:", streamError);
+          // Don't throw here, continue to check if we have data or can check database
         }
 
         // Type guard for completed status
@@ -213,53 +313,14 @@ if (shouldInitialize) {
           return data !== null && data.status === "error";
         };
 
-        // Check the final result
-        if (isCompletedData(lastData) && bot) {
-          const short = lastData.short;
-
-          // Extract caption string
-          let captionText = "No caption generated";
-          if (typeof short.captions === "string") {
-            captionText = short.captions;
-          } else if (short.captions?.tiktok) {
-            captionText = short.captions.tiktok;
-          }
-
-          // Send success message with video details
-          const completionMessage =
-            `✅ *Video Ready!*\n\n` +
-            `🎬 *Title:* ${short.title}\n` +
-            `🎯 *Virality Score:* ${short.virality_score}/100\n` +
-            `💡 *Analysis:*\n_${
-              short.description || "No analysis available"
-            }_\n\n` +
-            `📝 *Caption suggestion:*\n${captionText}\n\n` +
-            `🪙 *Tokens remaining:* ${lastData.tokens_remaining || 0}\n\n` +
-            `🌐 *View your short:* [Open Dashboard](${
-              process.env.API_BASE_URL || "http://localhost:3000"
-            }/your-clip)\n` +
-            `🔗 *Original:* [View on YouTube](${videoUrl})`;
-
-          await bot.sendMessage(chatId, completionMessage, {
-            parse_mode: "Markdown",
-            disable_web_page_preview: true,
-          });
-
-          // Send download link message
-          await bot.sendMessage(
+        // Check the final result from SSE
+        if (isCompletedData(lastData)) {
+          // Normal success case - we got the complete data from SSE
+          await sendSuccessMessages(
             chatId,
-            `🎉 *Success!*\n\n` +
-              `Your short "${short.title}" is ready!\n\n` +
-              `📱 *View & Download:* [${
-                process.env.API_BASE_URL || "http://localhost:3000"
-              }/your-clip](${
-                process.env.API_BASE_URL || "http://localhost:3000"
-              }/your-clip)\n\n` +
-              `💾 *Direct download:* ${short.download_url || "Not available"}`,
-            {
-              parse_mode: "Markdown",
-              disable_web_page_preview: false,
-            }
+            videoUrl,
+            lastData.short,
+            lastData.tokens_remaining || 0
           );
         } else if (isErrorData(lastData)) {
           // Handle error cases
@@ -288,15 +349,138 @@ if (shouldInitialize) {
             });
           }
         } else {
-          // No valid final status
-          if (bot) {
-            await bot.sendMessage(
-              chatId,
-              `❌ *Processing Error*\n\nSomething went wrong during processing. Please try again later.`,
-              {
-                parse_mode: "Markdown",
-              }
+          // Connection was interrupted or no clear status
+          console.log(
+            "🔍 Connection interrupted, checking database for completed video..."
+          );
+
+          // Wait a bit for the background process to complete
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+
+          // Check database for recently added video
+          try {
+            const allShorts = (await KlapModel.getUserShorts(
+              userId
+            )) as DatabaseShort[];
+            // Sort by created_at and take only the most recent one
+            const sortedShorts = allShorts.sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
             );
+
+            // Check if the most recent short was created after we started processing
+            const newShort =
+              sortedShorts.length > 0 &&
+              new Date(sortedShorts[0].created_at).getTime() >=
+                processingStartTime
+                ? sortedShorts[0]
+                : null;
+
+            if (newShort) {
+              console.log(
+                "✅ Found completed video in database:",
+                newShort.title
+              );
+
+              // Get current token count
+              const currentTokens = await KlapModel.getUserTokenCount(userId);
+
+              // Send success messages with data from database
+              await sendSuccessMessages(
+                chatId,
+                videoUrl,
+                {
+                  id: newShort.id,
+                  title: newShort.title,
+                  virality_score: newShort.virality_score,
+                  description: newShort.description,
+                  captions: newShort.captions,
+                  download_url: newShort.download_url,
+                },
+                currentTokens
+              );
+            } else {
+              // No video found in database, wait more and check again
+              console.log("⏳ Video not found yet, waiting 15 seconds more...");
+              await new Promise((resolve) => setTimeout(resolve, 15000));
+
+              // Check one more time
+              const allShortsSecond = (await KlapModel.getUserShorts(
+                userId
+              )) as DatabaseShort[];
+              const sortedShortsSecond = allShortsSecond.sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() -
+                  new Date(a.created_at).getTime()
+              );
+
+              const foundShort =
+                sortedShortsSecond.length > 0 &&
+                new Date(sortedShortsSecond[0].created_at).getTime() >=
+                  processingStartTime
+                  ? sortedShortsSecond[0]
+                  : null;
+
+              if (foundShort) {
+                console.log(
+                  "✅ Found completed video in database (second check):",
+                  foundShort.title
+                );
+                const currentTokens = await KlapModel.getUserTokenCount(userId);
+
+                await sendSuccessMessages(
+                  chatId,
+                  videoUrl,
+                  {
+                    id: foundShort.id,
+                    title: foundShort.title,
+                    virality_score: foundShort.virality_score,
+                    description: foundShort.description,
+                    captions: foundShort.captions,
+                    download_url: foundShort.download_url,
+                  },
+                  currentTokens
+                );
+              } else {
+                // Still no video, send a helpful message
+                if (bot) {
+                  await bot.sendMessage(
+                    chatId,
+                    `⏳ *Still Processing*\n\n` +
+                      `Your video is taking a bit longer than expected.\n\n` +
+                      `Don't worry! Processing continues in the background.\n\n` +
+                      `Please check your dashboard in a few minutes:\n` +
+                      `🌐 [Open Dashboard](${
+                        process.env.API_BASE_URL || "http://localhost:3000"
+                      }/your-clip)\n\n` +
+                      `Or use /checkVideo to check if it's ready.`,
+                    {
+                      parse_mode: "Markdown",
+                      disable_web_page_preview: false,
+                    }
+                  );
+                }
+              }
+            }
+          } catch (dbError) {
+            console.error("❌ Error checking database:", dbError);
+            // Fall back to generic message
+            if (bot) {
+              await bot.sendMessage(
+                chatId,
+                `⚠️ *Connection Interrupted*\n\n` +
+                  `The connection was interrupted, but your video may still be processing.\n\n` +
+                  `Please check your dashboard in a few minutes:\n` +
+                  `🌐 [Open Dashboard](${
+                    process.env.API_BASE_URL || "http://localhost:3000"
+                  }/your-clip)`,
+                {
+                  parse_mode: "Markdown",
+                  disable_web_page_preview: false,
+                }
+              );
+            }
           }
         }
       } catch (error: unknown) {
@@ -328,7 +512,6 @@ if (shouldInitialize) {
       const message = query.message as Message;
       const chatId = message.chat.id;
       const data = query.data || "";
-      const _messageId = message.message_id;
       const userId = query.from.id;
       const userName = query.from.first_name;
 
@@ -370,6 +553,7 @@ if (shouldInitialize) {
         }
       }
     });
+
     // Handle incoming messages - Email → OTP Flow
     bot.on("message", async (msg: Message) => {
       const chatId = msg.chat.id;
@@ -675,6 +859,7 @@ if (shouldInitialize) {
             `• /start - Get started\n` +
             `• /help - Show this help\n` +
             `• /status - Check connection status\n` +
+            `• /checkVideo - Check for recent videos\n` +
             `• /unlink - Disconnect your account\n\n` +
             `*How to Connect:*\n` +
             `1. Send your registered email\n` +
@@ -740,6 +925,128 @@ if (shouldInitialize) {
               `🆔 Chat ID: ${chatId}\n\n` +
               `To check if your account is connected, send your email address. ` +
               `The bot will tell you if it's already linked.`,
+            { parse_mode: "Markdown" }
+          );
+        }
+      }
+    });
+
+    // New command to check for recent videos
+    bot.onText(/\/checkVideo/, async (msg: Message) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from?.id;
+
+      if (!userId) {
+        if (bot) {
+          await bot.sendMessage(
+            chatId,
+            `❌ Unable to identify user. Please try again.`,
+            { parse_mode: "Markdown" }
+          );
+        }
+        return;
+      }
+
+      try {
+        // First check if user is linked
+        const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
+        const statusResponse = await axios.post<CheckStatusResponse>(
+          `${API_URL}/api/telegram/check-status`,
+          { chatId: chatId },
+          {
+            headers: { "Content-Type": "application/json" },
+            timeout: 5000,
+          }
+        );
+
+        if (!statusResponse.data.success || !statusResponse.data.user) {
+          if (bot) {
+            await bot.sendMessage(
+              chatId,
+              `❌ *Not Connected*\n\n` +
+                `Please connect your account first by sending your email address.`,
+              { parse_mode: "Markdown" }
+            );
+          }
+          return;
+        }
+
+        // Get userId from database
+        const foundUserId = await KlapModel.getUserIdFromChatId(chatId);
+        if (!foundUserId) {
+          if (bot) {
+            await bot.sendMessage(
+              chatId,
+              `❌ Unable to find your account. Please reconnect by sending your email.`,
+              { parse_mode: "Markdown" }
+            );
+          }
+          return;
+        }
+
+        // Check for recent videos
+        const allUserShorts = (await KlapModel.getUserShorts(
+          foundUserId
+        )) as DatabaseShort[];
+        // Sort by created_at and take the 3 most recent
+        const recentShorts = allUserShorts
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+          )
+          .slice(0, 3);
+
+        if (recentShorts.length === 0) {
+          if (bot) {
+            await bot.sendMessage(
+              chatId,
+              `📹 *No Videos Found*\n\n` +
+                `You haven't created any videos yet.\n\n` +
+                `Start creating amazing content with Reeru!`,
+              { parse_mode: "Markdown" }
+            );
+          }
+          return;
+        }
+
+        // Show recent videos
+        let message = `🎬 *Your Recent Videos*\n\n`;
+
+        for (const short of recentShorts) {
+          const createdAt = new Date(short.created_at);
+          const minutesAgo = Math.floor(
+            (Date.now() - createdAt.getTime()) / 60000
+          );
+          const timeAgo =
+            minutesAgo < 60
+              ? `${minutesAgo} minutes ago`
+              : minutesAgo < 1440
+              ? `${Math.floor(minutesAgo / 60)} hours ago`
+              : `${Math.floor(minutesAgo / 1440)} days ago`;
+
+          message += `📌 *${short.title}*\n`;
+          message += `🎯 Score: ${short.virality_score}/100\n`;
+          message += `⏰ Created: ${timeAgo}\n`;
+          message += `💾 [Download](${short.download_url || "#"})\n\n`;
+        }
+
+        message += `🌐 [View all in Dashboard](${
+          process.env.API_BASE_URL || "http://localhost:3000"
+        }/your-clip)`;
+
+        if (bot) {
+          await bot.sendMessage(chatId, message, {
+            parse_mode: "Markdown",
+            disable_web_page_preview: true,
+          });
+        }
+      } catch (error: unknown) {
+        console.error("❌ Error checking videos:", error);
+        if (bot) {
+          await bot.sendMessage(
+            chatId,
+            `❌ *Error*\n\nFailed to check videos. Please try again later.`,
             { parse_mode: "Markdown" }
           );
         }
