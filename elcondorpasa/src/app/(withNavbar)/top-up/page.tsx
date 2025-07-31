@@ -508,7 +508,7 @@ export default function TopUpPage() {
         // Open Midtrans Snap popup
         window.snap.pay(token, {
           onSuccess: async function (result: SnapResult) {
-            // console.log("Payment success:", result);
+            console.log("Payment success:", result);
             // Update tokens in the navbar immediately
             if (pkg.reeruToken) {
               addTokens(pkg.reeruToken);
@@ -518,7 +518,7 @@ export default function TopUpPage() {
             setError("");
           },
           onPending: function (result: SnapResult) {
-            // console.log("Payment pending:", result);
+            console.log("Payment pending:", result);
             setError("Payment is pending. Please complete your payment.");
             setIsLoading(false);
 
@@ -526,7 +526,7 @@ export default function TopUpPage() {
             checkTransactionStatus(order_id, pkg);
           },
           onError: function (result: SnapResult) {
-            // console.log("Payment error:", result);
+            console.log("Payment error:", result);
             setError(
               result.status_message || "Payment failed. Please try again."
             );

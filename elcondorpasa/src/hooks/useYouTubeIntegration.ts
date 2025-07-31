@@ -18,9 +18,20 @@ export const useYouTubeIntegration = (): UseYouTubeIntegrationReturn => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
 
+  // Add base URL configuration
+  const getBaseURL = () => {
+    if (typeof window !== "undefined") {
+      // Use relative URLs in production
+      return window.location.hostname === "localhost"
+        ? "http://localhost:3000"
+        : "";
+    }
+    return "";
+  };
+
   const checkConnection = useCallback(async () => {
     try {
-      const response = await axios.get("/api/youtube/status", {
+      const response = await axios.get(`${getBaseURL()}/api/youtube/status`, {
         withCredentials: true,
       });
       setIsConnected(response.data.connected);
@@ -32,7 +43,7 @@ export const useYouTubeIntegration = (): UseYouTubeIntegrationReturn => {
 
   const handleLogin = useCallback(async () => {
     try {
-      const response = await axios.get("/api/youtube/auth-url", {
+      const response = await axios.get(`${getBaseURL()}/api/youtube/auth-url`, {
         withCredentials: true,
       });
 
@@ -55,7 +66,10 @@ export const useYouTubeIntegration = (): UseYouTubeIntegrationReturn => {
 
   const handleUpload = useCallback(
     async (video: VideoShort) => {
-      if (!isConnected) return;
+      if (!isConnected) {
+        console.error("Not connected to YouTube");
+        return;
+      }
 
       setIsUploading(true);
       setUploadStatus("Preparing upload...");
@@ -87,20 +101,28 @@ export const useYouTubeIntegration = (): UseYouTubeIntegrationReturn => {
 
         setUploadStatus("Uploading to YouTube...");
 
-        const response = await axios.post("/api/youtube/upload", formData, {
-          withCredentials: true,
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const progress = Math.round(
-                (progressEvent.loaded / progressEvent.total) * 100
-              );
-              setUploadStatus(`Uploading... ${progress}%`);
-            }
-          },
-        });
+        // Enhanced error handling and debugging
+        const response = await axios.post(
+          `${getBaseURL()}/api/youtube/upload`,
+          formData,
+          {
+            withCredentials: true,
+            headers: {
+              "Content-Type": "multipart/form-data",
+              // No need to manually add x-userid - middleware handles it
+            },
+            onUploadProgress: (progressEvent) => {
+              if (progressEvent.total) {
+                const progress = Math.round(
+                  (progressEvent.loaded / progressEvent.total) * 100
+                );
+                setUploadStatus(`Uploading... ${progress}%`);
+              }
+            },
+            // Add timeout for large files
+            timeout: 300000, // 5 minutes
+          }
+        );
 
         if (response.data.success) {
           setUploadStatus("Upload successful! 🎉");
@@ -111,14 +133,53 @@ export const useYouTubeIntegration = (): UseYouTubeIntegrationReturn => {
             setUploadStatus("");
             setIsUploading(false);
           }, 2000);
+        } else {
+          // Handle API error response
+          throw new Error(response.data.error || "Upload failed");
         }
       } catch (error) {
         console.error("Error uploading to YouTube:", error);
-        setUploadStatus("Upload failed. Please try again.");
+
+        // Enhanced error messaging
+        let errorMessage = "Upload failed. ";
+
+        if (axios.isAxiosError(error)) {
+          if (error.response) {
+            // The request was made and the server responded with a status code
+            // that falls out of the range of 2xx
+            console.error("Error response:", error.response.data);
+            console.error("Error status:", error.response.status);
+
+            if (error.response.status === 401) {
+              errorMessage +=
+                "Authentication failed. Please reconnect YouTube.";
+              setIsConnected(false);
+            } else if (error.response.status === 413) {
+              errorMessage += "File too large.";
+            } else if (error.response.status === 500) {
+              errorMessage += "Server error. Check production logs.";
+            } else {
+              errorMessage +=
+                error.response.data?.message || "Please try again.";
+            }
+          } else if (error.request) {
+            // The request was made but no response was received
+            console.error("No response received:", error.request);
+            errorMessage += "Network error. Check your connection.";
+          } else {
+            // Something happened in setting up the request
+            console.error("Request setup error:", error.message);
+            errorMessage += error.message;
+          }
+        } else {
+          errorMessage += (error as Error).message || "Unknown error occurred.";
+        }
+
+        setUploadStatus(errorMessage);
         setTimeout(() => {
           setUploadStatus("");
           setIsUploading(false);
-        }, 3000);
+        }, 5000);
       }
     },
     [isConnected]
