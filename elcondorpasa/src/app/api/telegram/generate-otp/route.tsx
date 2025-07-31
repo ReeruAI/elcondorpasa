@@ -30,15 +30,23 @@ export async function POST(request: NextRequest) {
         instructions: "Go to Telegram and send this OTP code to @YourBot",
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Generate OTP error:", error);
-
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to generate OTP",
+        message:
+          error instanceof Error ? error.message : "Failed to generate OTP",
       },
-      { status: error.status || 500 }
+      {
+        status:
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          typeof (error as { status?: unknown }).status === "number"
+            ? (error as { status: number }).status
+            : 500,
+      }
     );
   }
 }
@@ -61,15 +69,23 @@ export async function GET(request: NextRequest) {
       success: true,
       data: otpStatus,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Get OTP status error:", error);
-
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to get OTP status",
+        message:
+          error instanceof Error ? error.message : "Failed to get OTP status",
       },
-      { status: error.status || 500 }
+      {
+        status:
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          typeof (error as { status?: unknown }).status === "number"
+            ? (error as { status: number }).status
+            : 500,
+      }
     );
   }
 }
@@ -92,15 +108,23 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: "OTP cancelled successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Cancel OTP error:", error);
-
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to cancel OTP",
+        message:
+          error instanceof Error ? error.message : "Failed to cancel OTP",
       },
-      { status: error.status || 500 }
+      {
+        status:
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          typeof (error as { status?: unknown }).status === "number"
+            ? (error as { status: number }).status
+            : 500,
+      }
     );
   }
 }

@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { database } from "@/db/config/mongodb";
 import { ObjectId } from "mongodb";
 
-interface YouTubeStatus {
-  connected: boolean;
-  channelName?: string | null;
-}
-
 export async function GET(request: NextRequest) {
   try {
     // Get userId from your middleware

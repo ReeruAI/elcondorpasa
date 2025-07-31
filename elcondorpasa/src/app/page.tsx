@@ -5,7 +5,6 @@ import React from "react";
 import { motion } from "motion/react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Play,
   Zap,
   CheckCircle,
   ArrowRight,
@@ -42,16 +41,6 @@ interface ScaleButtonProps extends React.ComponentProps<typeof motion.button> {
   className?: string;
   onClick?: () => void;
 }
-
-// Animation variants
-const fadeInVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (delay: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, delay },
-  }),
-};
 
 const scaleVariants = {
   idle: { scale: 1 },
@@ -104,12 +93,7 @@ interface SectionProps {
   className?: string;
 }
 
-const Section: React.FC<SectionProps> = ({
-  id,
-  bgColor = "primary",
-  children,
-  className = "",
-}) => {
+const Section: React.FC<SectionProps> = ({ id, children, className = "" }) => {
   return (
     <section
       id={id}
@@ -276,7 +260,6 @@ interface VideoPreviewProps {
 }
 
 const VideoPreview: React.FC<VideoPreviewProps> = ({
-  title,
   aspectRatio = "aspect-video",
   duration,
 }) => (
@@ -796,7 +779,7 @@ export default function Home() {
                       }}
                     >
                       <p className="text-base sm:text-lg mb-4 italic text-gray-300">
-                        "{testimonial.quote}"
+                        &quot;{testimonial.quote}&quot;
                       </p>
                       <div className="flex items-center gap-3">
                         <motion.div

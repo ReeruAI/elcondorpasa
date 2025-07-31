@@ -1,22 +1,20 @@
 // telegramBotManager.ts - Complete with Email-OTP Flow
-const TelegramBot = require("node-telegram-bot-api");
+import TelegramBot, {
+  CallbackQuery,
+  Message,
+  SendMessageOptions,
+} from "node-telegram-bot-api";
+import { TelegramUserState } from "../types";
 import axios from "axios";
 
 class TelegramBotManager {
   private static instance: TelegramBotManager;
-  private bot: any = null;
+  private bot: TelegramBot | null = null;
   private isInitializing: boolean = false;
-  private initPromise: Promise<any> | null = null;
+  private initPromise: Promise<TelegramBot | null> | null = null;
 
   // Store user states (in production, use Redis or database)
-  private userStates = new Map<
-    number,
-    {
-      step: "waiting_email" | "waiting_otp";
-      email?: string;
-      expiresAt?: Date;
-    }
-  >();
+  private userStates = new Map<number, TelegramUserState>();
 
   private constructor() {
     // Clean up expired states periodically
@@ -73,11 +71,17 @@ class TelegramBotManager {
       }
 
       const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) {
+        throw new Error(
+          "TELEGRAM_BOT_TOKEN is not set in environment variables"
+        );
+      }
 
       console.log("🤖 Creating new Telegram Bot instance...");
+      const port = process.env.PORT ? Number(process.env.PORT) : 3000;
       const newBot = new TelegramBot(token, {
         webHook: {
-          port: process.env.PORT || 3000,
+          port,
         },
       });
 
@@ -99,7 +103,7 @@ class TelegramBotManager {
     videoUrl: string,
     chatId: number,
     userId: number,
-    bot: any
+    bot: TelegramBot
   ) {
     const API_URL = `${
       process.env.API_BASE_URL || "http://localhost:3000"
@@ -182,6 +186,14 @@ class TelegramBotManager {
                     });
                   } catch (editError) {
                     // Message might be identical, ignore error
+                    if (editError instanceof Error) {
+                      console.error(
+                        "❌ Error editing message:",
+                        editError.message
+                      );
+                    } else {
+                      console.error("❌ Error editing message:", editError);
+                    }
                   }
                 } else {
                   const sentMessage = await bot.sendMessage(
@@ -331,13 +343,15 @@ class TelegramBotManager {
           }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("❌ Klap API Error:", error);
 
       const errorMessage =
         `❌ *Error*\n\n` +
         `Failed to process your video.\n` +
-        `Error: ${error.message || "Unknown error"}\n\n` +
+        `Error: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }\n\n` +
         `Please try again later or contact support.`;
 
       if (messageId) {
@@ -354,9 +368,13 @@ class TelegramBotManager {
     }
   }
 
-  private setupHandlers(bot: any) {
+  private setupHandlers(bot: TelegramBot) {
     // Handle callback queries (button clicks)
-    bot.on("callback_query", async (query: any) => {
+    bot.on("callback_query", async (query: CallbackQuery) => {
+      if (!query.message || !query.data) {
+        // Ignore malformed callback queries
+        return;
+      }
       const chatId = query.message.chat.id;
       const data = query.data;
       const messageId = query.message.message_id;
@@ -387,7 +405,7 @@ class TelegramBotManager {
           );
 
           await this.processVideoWithKlap(videoUrl, chatId, userId, bot);
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error handling callback query:", error);
 
           await bot.answerCallbackQuery(query.id, {
@@ -405,7 +423,11 @@ class TelegramBotManager {
     });
 
     // Handle incoming messages - Email → OTP Flow
-    bot.on("message", async (msg: any) => {
+    bot.on("message", async (msg: Message) => {
+      if (!msg.from) {
+        // Ignore messages without sender info
+        return;
+      }
       const chatId = msg.chat.id;
       const text = msg.text;
       const name = msg.from.first_name;
@@ -468,13 +490,13 @@ class TelegramBotManager {
                 { parse_mode: "Markdown" }
               );
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             console.error("❌ Complete email linking error:", error);
 
             let errorMessage = "❌ *Verification Failed*\n\n";
-
-            if (error.response?.data?.message) {
-              if (error.response.data.message.includes("Invalid OTP")) {
+            const err = error as { response?: { data?: { message?: string } } };
+            if (err.response?.data?.message) {
+              if (err.response.data.message.includes("Invalid OTP")) {
                 errorMessage +=
                   "❌ *Invalid or Expired OTP*\n\n" +
                   "The OTP code is either invalid, expired, or already used.\n\n" +
@@ -483,7 +505,7 @@ class TelegramBotManager {
                   "2. Generate a new OTP code\n" +
                   "3. Send the new code here";
               } else if (
-                error.response.data.message.includes(
+                err.response.data.message.includes(
                   "verification session expired"
                 )
               ) {
@@ -493,7 +515,7 @@ class TelegramBotManager {
                   "💡 *Solution:* Send your email address again to restart.";
                 this.userStates.delete(chatId);
               } else {
-                errorMessage += error.response.data.message;
+                errorMessage += err.response.data.message;
               }
             } else {
               errorMessage += "Unable to verify OTP. Please try again.";
@@ -570,11 +592,18 @@ class TelegramBotManager {
               { parse_mode: "Markdown" }
             );
           }
-        } catch (error: any) {
-          console.log("❌ Email initiation error:", error.message);
+        } catch (error: unknown) {
+          const err = error as {
+            response?: { data?: { message?: string; errorCode?: string } };
+          };
+          console.log(
+            "❌ Email initiation error:",
+            err.response?.data?.message ||
+              (error instanceof Error ? error.message : error)
+          );
 
           let errorMessage = "❌ *Email Verification Failed*\n\n";
-          const errorCode = error.response?.data?.errorCode;
+          const errorCode = err.response?.data?.errorCode;
 
           switch (errorCode) {
             case "email_not_found":
@@ -607,7 +636,8 @@ class TelegramBotManager {
 
             default:
               errorMessage += `${
-                error.response?.data?.message || error.message
+                err.response?.data?.message ||
+                (error instanceof Error ? error.message : "Unknown error")
               }\n\n💡 Please try again or contact support.`;
           }
 
@@ -649,7 +679,8 @@ class TelegramBotManager {
     });
 
     // Commands
-    bot.onText(/\/start/, async (msg: any) => {
+    bot.onText(/\/start/, async (msg: Message) => {
+      if (!msg.from) return;
       const chatId = msg.chat.id;
       const name = msg.from.first_name;
 
@@ -665,7 +696,7 @@ class TelegramBotManager {
       );
     });
 
-    bot.onText(/\/help/, async (msg: any) => {
+    bot.onText(/\/help/, async (msg: Message) => {
       const chatId = msg.chat.id;
 
       await bot.sendMessage(
@@ -686,7 +717,8 @@ class TelegramBotManager {
       );
     });
 
-    bot.onText(/\/status/, async (msg: any) => {
+    bot.onText(/\/status/, async (msg: Message) => {
+      if (!msg.from) return;
       const chatId = msg.chat.id;
       const name = msg.from.first_name;
 
@@ -725,6 +757,7 @@ class TelegramBotManager {
           );
         }
       } catch (error) {
+        console.error("❌ Status check error:", error);
         await bot.sendMessage(
           chatId,
           `📊 *Connection Status*\n\n` +
@@ -736,9 +769,8 @@ class TelegramBotManager {
       }
     });
 
-    bot.onText(/\/unlink/, async (msg: any) => {
+    bot.onText(/\/unlink/, async (msg: Message) => {
       const chatId = msg.chat.id;
-      const name = msg.from.first_name;
 
       try {
         const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
@@ -775,13 +807,13 @@ class TelegramBotManager {
             { parse_mode: "Markdown" }
           );
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("❌ Unlink error:", error);
 
         let errorMessage = "❌ *Failed to Disconnect Account*\n\n";
-
-        if (error.response?.data?.message) {
-          errorMessage += error.response.data.message;
+        const err = error as { response?: { data?: { message?: string } } };
+        if (err.response?.data?.message) {
+          errorMessage += err.response.data.message;
         } else {
           errorMessage += "Unable to process unlink request. Please try again.";
         }
@@ -802,7 +834,11 @@ class TelegramBotManager {
     await this.getBot();
   }
 
-  async sendNotification(chatId: number, message: string, options?: any) {
+  async sendNotification(
+    chatId: number,
+    message: string,
+    options?: SendMessageOptions
+  ) {
     try {
       const bot = await this.getBot();
       if (!bot) {

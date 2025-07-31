@@ -1,44 +1,11 @@
 import { database } from "@/db/config/mongodb";
+import {
+  UserDocument,
+  UserPreference,
+  UserShort,
+  UserShortsDocument,
+} from "@/types";
 import { ObjectId } from "mongodb";
-
-interface UserShort {
-  title: string;
-  virality_score: number;
-  description?: string;
-  captions: {
-    tiktok: string;
-    youtube: string;
-    linkedin: string;
-    instagram: string;
-  };
-  download_url: string;
-  description?: string;
-  created_at?: Date;
-}
-
-interface UserShortsDocument {
-  _id?: ObjectId;
-  userid: string;
-  shorts: UserShort[];
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-interface UserDocument {
-  _id: ObjectId;
-  username: string;
-  name: string;
-  email: string;
-  password: string;
-  reeruToken: number;
-  isProcessingVideo?: boolean;
-  telegramChatId?: number; // Added for Telegram support
-}
-
-interface UserPreference {
-  userId: string;
-  languagePreference?: string;
-}
 
 class KlapModel {
   private static userShortsCollection = "usershorts";

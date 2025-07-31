@@ -121,7 +121,7 @@ export async function middleware(request: NextRequest) {
 async function verifyAndExtractToken(token: string): Promise<{
   isValid: boolean;
   userId?: string;
-  error?: any;
+  error?: unknown;
 }> {
   try {
     const [tokenType, tokenValue] = token.split(" ");
@@ -169,7 +169,6 @@ export const config = {
     "/api/gemini/:path*",
     "/api/midtrans/:path*",
     "/api/klap/:path*",
-    "/api/user-shorts/:path*",
     "/api/youtube/:path*",
     "/api/telegram/verify-otp/:path*",
   ],

@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Menu,
-  Sparkles,
   X,
   User,
   LogOut,
@@ -23,27 +22,6 @@ export default function NavbarLanding() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-
-  interface ScaleButtonProps
-    extends React.ComponentProps<typeof motion.button> {
-    children: React.ReactNode;
-    className?: string;
-  }
-
-  const ScaleButton: React.FC<ScaleButtonProps> = ({
-    children,
-    className = "",
-    ...props
-  }) => (
-    <motion.button
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      className={className}
-      {...props}
-    >
-      {children}
-    </motion.button>
-  );
 
   const navLinks = [
     { href: "#home", label: "Home" },

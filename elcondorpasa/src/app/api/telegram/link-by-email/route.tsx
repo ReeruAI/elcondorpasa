@@ -70,27 +70,38 @@ export async function POST(request: NextRequest) {
         email: linkedUser.email,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Link by email error:", error);
 
     // Enhanced error handling for new validation cases
-    let errorMessage = error.message || "Internal server error";
-    let statusCode = error.status || 500;
+    let errorMessage =
+      typeof error === "object" &&
+      error !== null &&
+      "message" in error &&
+      typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "Internal server error";
+    let statusCode =
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      typeof (error as { status?: unknown }).status === "number"
+        ? (error as { status: number }).status
+        : 500;
 
     // Handle specific error cases with user-friendly messages
-    if (error.message?.includes("Email tidak ditemukan")) {
+    if (errorMessage.includes("Email tidak ditemukan")) {
       errorMessage = "Email tidak ditemukan di sistem Reeru";
       statusCode = 404;
-    } else if (error.message?.includes("sudah terhubung dengan user lain")) {
+    } else if (errorMessage.includes("sudah terhubung dengan user lain")) {
       errorMessage = "Akun Telegram ini sudah terhubung dengan user lain";
       statusCode = 400;
     } else if (
-      error.message?.includes("sudah terhubung dengan akun Telegram lain")
+      errorMessage.includes("sudah terhubung dengan akun Telegram lain")
     ) {
-      // NEW ERROR CASE - Handle the new validation
       errorMessage = "Email ini sudah terhubung dengan akun Telegram lain";
       statusCode = 400;
-    } else if (error.message?.includes("Failed to link Telegram account")) {
+    } else if (errorMessage.includes("Failed to link Telegram account")) {
       errorMessage = "Gagal menghubungkan akun Telegram";
       statusCode = 500;
     }
@@ -100,7 +111,7 @@ export async function POST(request: NextRequest) {
         success: false,
         message: errorMessage,
         // Include error code for better client-side handling
-        errorCode: getErrorCode(error.message),
+        errorCode: getErrorCode(errorMessage),
       },
       { status: statusCode }
     );

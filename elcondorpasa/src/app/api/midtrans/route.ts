@@ -1,6 +1,6 @@
 import { database } from "@/db/config/mongodb";
 import { MidtransModel } from "@/db/models/MidtransModel";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { ObjectId } from "mongodb";
 
 export async function POST(req: Request) {
@@ -118,12 +118,19 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("Midtrans Error:", error);
 
-    if (error instanceof Error) {
-      const axiosError = error as any;
+    if (error instanceof AxiosError) {
       return Response.json(
         {
           message: "Failed to create transaction",
-          error: axiosError.response?.data || error.message,
+          error: error.response?.data || error.message,
+        },
+        { status: 500 }
+      );
+    } else if (error instanceof Error) {
+      return Response.json(
+        {
+          message: "Failed to create transaction",
+          error: error.message,
         },
         { status: 500 }
       );

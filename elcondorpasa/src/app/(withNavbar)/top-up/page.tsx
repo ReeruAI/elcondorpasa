@@ -16,10 +16,20 @@ import { useTokens } from "@/components/Navbar"; // Import the token hook
 import ParticleBackground from "@/components/yourclip/ParticleBackground";
 import CursorGlow from "@/components/CursorGlow"; // Import CursorGlow
 
-// Declare Midtrans Snap global
+interface SnapCallbacks {
+  onSuccess?: (result: SnapResult) => void;
+  onPending?: (result: SnapResult) => void;
+  onError?: (result: SnapResult) => void;
+  onClose?: () => void;
+}
+
+interface Snap {
+  pay: (token: string, callbacks?: SnapCallbacks) => void;
+}
+
 declare global {
   interface Window {
-    snap: any;
+    snap: Snap;
   }
 }
 
@@ -138,35 +148,6 @@ const FadeInView: React.FC<{
   >
     {children}
   </motion.div>
-);
-
-const AnimatedBackground = () => (
-  <>
-    <motion.div
-      animate={{
-        scale: [1, 1.2, 1],
-        rotate: [0, 180, 360],
-      }}
-      transition={{
-        duration: 20,
-        repeat: Infinity,
-        ease: "linear",
-      }}
-      className="absolute top-20 left-10 w-64 h-64 bg-[#D68CB8]/10 rounded-full blur-3xl"
-    />
-    <motion.div
-      animate={{
-        scale: [1.2, 1, 1.2],
-        rotate: [360, 180, 0],
-      }}
-      transition={{
-        duration: 25,
-        repeat: Infinity,
-        ease: "linear",
-      }}
-      className="absolute bottom-20 right-10 w-96 h-96 bg-[#D68CB8]/5 rounded-full blur-3xl"
-    />
-  </>
 );
 
 const SuccessModal: React.FC<{
@@ -349,6 +330,45 @@ export default function TopUpPage() {
     };
   }, []);
 
+  const checkTransactionStatus = useCallback(
+    async (orderId: string, pkg: Package) => {
+      let attempts = 0;
+      const maxAttempts = 20;
+
+      const check = async () => {
+        try {
+          const statusResponse = await axios.get(
+            `/api/transaction/status?orderId=${orderId}`
+          );
+
+          if (statusResponse.data.status === "paid") {
+            if (pkg.reeruToken) {
+              addTokens(pkg.reeruToken);
+            }
+            setShowSuccess(true);
+            setError("");
+          } else if (
+            statusResponse.data.status === "failed" ||
+            statusResponse.data.status === "expired"
+          ) {
+            // No-op
+          } else if (
+            statusResponse.data.status === "pending" &&
+            attempts < maxAttempts
+          ) {
+            attempts++;
+            setTimeout(check, 5000);
+          }
+        } catch (err) {
+          console.error("Status check error:", err);
+        }
+      };
+
+      setTimeout(check, 3000);
+    },
+    [addTokens, setShowSuccess, setError]
+  );
+
   const handlePackageSelect = useCallback(
     async (pkg: Package) => {
       if (!isSnapLoaded) {
@@ -405,46 +425,8 @@ export default function TopUpPage() {
         setIsLoading(false);
       }
     },
-    [isSnapLoaded, addTokens]
+    [isSnapLoaded, addTokens, checkTransactionStatus]
   );
-
-  const checkTransactionStatus = async (orderId: string, pkg: Package) => {
-    let attempts = 0;
-    const maxAttempts = 20;
-
-    const check = async () => {
-      try {
-        const statusResponse = await axios.get(
-          `/api/transaction/status?orderId=${orderId}`
-        );
-
-        if (statusResponse.data.status === "paid") {
-          // Update tokens when payment is confirmed via webhook
-          if (pkg.reeruToken) {
-            addTokens(pkg.reeruToken);
-          }
-          setShowSuccess(true);
-          setError("");
-        } else if (
-          statusResponse.data.status === "failed" ||
-          statusResponse.data.status === "expired"
-        ) {
-          // Status already shown by Snap callbacks
-        } else if (
-          statusResponse.data.status === "pending" &&
-          attempts < maxAttempts
-        ) {
-          attempts++;
-          setTimeout(check, 5000); // Check every 5 seconds
-        }
-      } catch (err) {
-        console.error("Status check error:", err);
-      }
-    };
-
-    // Start checking after 3 seconds
-    setTimeout(check, 3000);
-  };
 
   useEffect(() => {
     const title = `ReeruAI - Top up`;

@@ -64,72 +64,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Get single history item
-export async function GET_SINGLE(request: NextRequest) {
-  try {
-    const userId = request.headers.get("x-userId");
-
-    if (!userId) {
-      return NextResponse.json(
-        {
-          error: "Unauthorized",
-          message: "User ID not found",
-        },
-        { status: 401 }
-      );
-    }
-
-    // Extract historyId from URL
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split("/");
-    const historyId = pathParts[pathParts.length - 1];
-
-    if (!historyId) {
-      return NextResponse.json(
-        {
-          error: "History ID is required",
-        },
-        { status: 400 }
-      );
-    }
-
-    const history = await HistoryModel.getHistoryById(historyId);
-
-    if (!history) {
-      return NextResponse.json(
-        {
-          error: "History not found",
-        },
-        { status: 404 }
-      );
-    }
-
-    // Verify ownership
-    if (history.userId !== userId) {
-      return NextResponse.json(
-        {
-          error: "Unauthorized",
-        },
-        { status: 403 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: history,
-    });
-  } catch (error) {
-    console.error("History fetch error:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to fetch history",
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
-  }
-}
-
 // DELETE endpoint to clear history
 export async function DELETE(request: NextRequest) {
   try {
@@ -169,14 +103,14 @@ export async function DELETE(request: NextRequest) {
       message: "All history cleared",
       deletedCount,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("History delete error:", error);
     return NextResponse.json(
       {
         error: "Failed to delete history",
-        message: error.message || "Unknown error",
+        message: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: error.status || 500 }
+      { status: 500 }
     );
   }
 }

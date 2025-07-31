@@ -164,16 +164,6 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
   },
 ];
 
-// Animation variants
-const fadeInVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (delay: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, delay },
-  }),
-};
-
 const cardVariants = {
   hidden: { opacity: 0, scale: 0.8 },
   visible: (delay: number = 0) => ({
@@ -506,7 +496,7 @@ export default function PreferencePage() {
             transition={{ delay: 0.1 }}
             className="text-center mb-12"
           >
-            <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
+            <h1 className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-pink-200 to-pink-600 bg-clip-text text-transparent mb-4">
               Choose Your{" "}
               <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
                 Preferences

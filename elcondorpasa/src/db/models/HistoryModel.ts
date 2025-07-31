@@ -154,7 +154,11 @@ class HistoryModel {
     languagePreference?: string
   ): Promise<History[]> {
     const collection = await this.collection();
-    const query: any = { userId };
+    const query: {
+      userId: string;
+      contentPreference?: string;
+      languagePreference?: string;
+    } = { userId };
 
     if (contentPreference) {
       query.contentPreference = contentPreference;

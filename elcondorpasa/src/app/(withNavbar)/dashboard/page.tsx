@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { usePathname, useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { TrendingUp, Loader2, History } from "lucide-react";
@@ -15,6 +15,8 @@ import { StreamingProgress } from "@/components/dashboard/StreamingProgress";
 import { UrlInputSection } from "@/components/dashboard/UrlInputSection";
 import { VideoCarousel } from "@/components/dashboard/VideoCarousel";
 import { EmptyState } from "@/components/dashboard/EmptyState";
+import { useTokens } from "@/components/Navbar";
+import { AlertModal } from "@/components/dashboard/AlertModal";
 import ParticleBackground from "@/components/yourclip/ParticleBackground";
 
 // Types
@@ -47,16 +49,6 @@ const REFRESH_USED_KEY = "yourclip_refresh_used";
 const REFRESH_USED_TIMESTAMP_KEY = "yourclip_refresh_timestamp";
 const USER_ID_KEY = "yourclip_current_user";
 
-// Export function to clear user data (can be called from logout)
-export const clearUserRecommendationData = () => {
-  localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
-  localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
-  localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
-  localStorage.removeItem(REFRESH_USED_KEY);
-  localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
-  localStorage.removeItem(USER_ID_KEY);
-};
-
 export default function Dashboard() {
   // State management
   const [url, setUrl] = useState("");
@@ -69,7 +61,6 @@ export default function Dashboard() {
   const [trendingVideos, setTrendingVideos] = useState<TrendingVideo[]>([]);
   const [historyVideos, setHistoryVideos] = useState<TrendingVideo[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [historyStreamIndex, setHistoryStreamIndex] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasPreferences, setHasPreferences] = useState<boolean | null>(null);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
@@ -84,6 +75,10 @@ export default function Dashboard() {
   const [hasLoadedRecommendations, setHasLoadedRecommendations] =
     useState(false);
 
+  const { tokens, updateTokens } = useTokens();
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertMessage, setAlertMessage] = useState("");
+
   // Klap processing states
   const [processingState, setProcessingState] = useState<ProcessingState>({
     isProcessing: false,
@@ -95,9 +90,7 @@ export default function Dashboard() {
   // Video result state
   const [videoResult, setVideoResult] = useState<VideoResult | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
-  const [urlError, setUrlError] = useState<string | null>(null);
 
-  const router = useRouter();
   const trendingSliderRef = useRef<HTMLDivElement>(
     null
   ) as React.RefObject<HTMLDivElement>;
@@ -195,47 +188,7 @@ export default function Dashboard() {
     localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
   };
 
-  // Fetch history videos with simulated streaming
-  const fetchHistoryVideos = useCallback(async () => {
-    try {
-      setIsLoadingHistory(true);
-      setHistoryVideos([]);
-      setHistoryStreamIndex(0);
-
-      const response = await axios.get("/api/history", {
-        withCredentials: true,
-      });
-
-      if (response.data?.data?.[0]?.videos) {
-        const videos = response.data.data[1].videos;
-        const uniqueVideos = new Map();
-
-        // Ensure unique videos by using a Map
-        for (let i = 0; i < videos.length; i++) {
-          const video = convertToTrendingVideo(videos[i]);
-          // Use video URL or ID as the key to ensure uniqueness
-          const key = video.url || video.id || `video-${i}`;
-          if (!uniqueVideos.has(key)) {
-            uniqueVideos.set(key, video);
-          }
-        }
-
-        // Convert Map back to array and stream them
-        const uniqueVideoArray = Array.from(uniqueVideos.values());
-        for (let i = 0; i < uniqueVideoArray.length; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          setHistoryVideos((prev) => [...prev, uniqueVideoArray[i]]);
-          setHistoryStreamIndex(i + 1);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching history videos:", error);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, []); // Remove dependencies to prevent re-creation
-
-  // Process streaming response
+  // Process streaming response - memoized with minimal dependencies
   const processStreamingResponse = useCallback(
     async (
       response: Response,
@@ -284,9 +237,7 @@ export default function Dashboard() {
                 const newVideo = convertToTrendingVideo(parsed.data);
                 tempStreamedVideos.push(newVideo);
                 setStreamedVideos((prev) => [...prev, newVideo]);
-                if (!showVideos) {
-                  setShowVideos(true);
-                }
+                setShowVideos(true);
               } else if (parsed.type === "complete") {
                 setIsStreamingVideos(false);
                 setStreamingMessage("");
@@ -301,10 +252,48 @@ export default function Dashboard() {
         }
       }
     },
-    [showVideos]
+    [] // No dependencies needed
   );
 
-  // Load recommendations
+  // Fetch history videos - memoized with no dependencies
+  const fetchHistoryVideos = useCallback(async () => {
+    try {
+      setIsLoadingHistory(true);
+      setHistoryVideos([]);
+
+      const response = await axios.get("/api/history", {
+        withCredentials: true,
+      });
+
+      if (response.data?.data?.[0]?.videos) {
+        const videos = response.data.data[1].videos;
+        const uniqueVideos = new Map();
+
+        // Ensure unique videos by using a Map
+        for (let i = 0; i < videos.length; i++) {
+          const video = convertToTrendingVideo(videos[i]);
+          // Use video URL or ID as the key to ensure uniqueness
+          const key = video.url || video.id || `video-${i}`;
+          if (!uniqueVideos.has(key)) {
+            uniqueVideos.set(key, video);
+          }
+        }
+
+        // Convert Map back to array and stream them
+        const uniqueVideoArray = Array.from(uniqueVideos.values());
+        for (let i = 0; i < uniqueVideoArray.length; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          setHistoryVideos((prev) => [...prev, uniqueVideoArray[i]]);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching history videos:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
+  // Load recommendations - memoized with stable dependencies
   const loadRecommendations = useCallback(
     async (preferences: UserPreferences, isRefresh: boolean = false) => {
       if (isRefresh) {
@@ -348,9 +337,14 @@ export default function Dashboard() {
         setIsStreamingVideos(false);
         setStreamingMessage("");
 
-        if (isRefresh && trendingVideos.length > 0) {
-          const shuffled = [...trendingVideos].sort(() => Math.random() - 0.5);
-          setTrendingVideos(shuffled);
+        if (isRefresh) {
+          // If refresh fails, try to show existing videos shuffled
+          setTrendingVideos((prev) => {
+            if (prev.length > 0) {
+              return [...prev].sort(() => Math.random() - 0.5);
+            }
+            return prev;
+          });
         }
       } finally {
         if (isRefresh) {
@@ -358,7 +352,7 @@ export default function Dashboard() {
         }
       }
     },
-    [processStreamingResponse, fetchHistoryVideos, trendingVideos]
+    [processStreamingResponse, fetchHistoryVideos]
   );
 
   // Check user preferences and load trending videos
@@ -429,7 +423,7 @@ export default function Dashboard() {
               setStreamedVideos(videos); // Also set streamed videos to show immediately
             } else {
               // Load recommendations for the first time
-              loadRecommendations({
+              await loadRecommendations({
                 contentPreference,
                 languagePreference,
               });
@@ -459,7 +453,7 @@ export default function Dashboard() {
     return () => {
       mounted = false;
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [fetchHistoryVideos, loadRecommendations]);
 
   // Add effect to clear recommendations when preferences change
   useEffect(() => {
@@ -489,8 +483,15 @@ export default function Dashboard() {
     e.preventDefault();
     if (!url.trim() || processingState.isProcessing) return;
 
+    if (tokens <= 0) {
+      setAlertMessage(
+        "You don't have enough tokens to generate a clip. Please top up your account to continue."
+      );
+      setShowAlertModal(true);
+      return;
+    }
+
     setIsLoading(true);
-    setUrlError(null); // Clear any previous errors
     setShowLoadingModal(true);
 
     const newProcessingState: ProcessingState = {
@@ -511,23 +512,8 @@ export default function Dashboard() {
         body: JSON.stringify({ video_url: url }),
       });
 
-      // Check if response is not ok
       if (!response.ok) {
-        const errorData = await response.json();
-        setUrlError(errorData.error || "Failed to start processing");
-        setShowLoadingModal(false);
-
-        // Clear processing state on error
-        clearProcessingState();
-        setProcessingState({
-          isProcessing: false,
-          progress: 0,
-          message: "",
-          status: "idle",
-        });
-
-        setIsLoading(false);
-        return;
+        throw new Error("Failed to start processing");
       }
 
       await processKlapStream(
@@ -546,7 +532,7 @@ export default function Dashboard() {
           saveProcessingState(updatedState);
         },
         // onComplete
-        (data: KlapStreamData) => {
+        async (data: KlapStreamData) => {
           clearProcessingState();
           setProcessingState({
             isProcessing: false,
@@ -554,6 +540,8 @@ export default function Dashboard() {
             message: "Successfully completed!",
             status: "completed",
           });
+
+          updateTokens(tokens - 1);
 
           // Save the result if needed
           if (data.short) {
@@ -578,7 +566,6 @@ export default function Dashboard() {
             message: error,
             status: "error",
           });
-          setUrlError(error);
           console.error("Klap processing error:", error);
         }
       );
@@ -591,7 +578,6 @@ export default function Dashboard() {
         message: "Failed to process video",
         status: "error",
       });
-      setUrlError("Failed to process video. Please try again.");
       setShowLoadingModal(false);
     } finally {
       setIsLoading(false);
@@ -601,8 +587,15 @@ export default function Dashboard() {
   const handleGenerateClip = async (videoUrl: string) => {
     if (processingState.isProcessing) return;
 
+    if (tokens <= 0) {
+      setAlertMessage(
+        "You don't have enough tokens to generate a clip. Please top up your account to continue."
+      );
+      setShowAlertModal(true);
+      return;
+    }
+
     setUrl(videoUrl);
-    setUrlError(null); // Clear any previous errors
     setShowLoadingModal(true);
 
     const newProcessingState: ProcessingState = {
@@ -624,19 +617,7 @@ export default function Dashboard() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        setUrlError(errorData.error || "Failed to start processing");
-        setShowLoadingModal(false);
-
-        clearProcessingState();
-        setProcessingState({
-          isProcessing: false,
-          progress: 0,
-          message: "",
-          status: "idle",
-        });
-
-        return;
+        throw new Error("Failed to start processing");
       }
 
       await processKlapStream(
@@ -655,7 +636,7 @@ export default function Dashboard() {
           saveProcessingState(updatedState);
         },
         // onComplete
-        (data: KlapStreamData) => {
+        async (data: KlapStreamData) => {
           clearProcessingState();
           setProcessingState({
             isProcessing: false,
@@ -663,6 +644,8 @@ export default function Dashboard() {
             message: "Successfully completed!",
             status: "completed",
           });
+
+          updateTokens(tokens - 1);
 
           if (data.short) {
             const result: VideoResult = {
@@ -686,7 +669,6 @@ export default function Dashboard() {
             message: error,
             status: "error",
           });
-          setUrlError(error);
           console.error("Klap processing error:", error);
         }
       );
@@ -699,7 +681,6 @@ export default function Dashboard() {
         message: "Failed to process video",
         status: "error",
       });
-      setUrlError("Failed to process video. Please try again.");
       setShowLoadingModal(false);
     }
   };
@@ -742,15 +723,6 @@ export default function Dashboard() {
     setShowOptionsModal(true);
   };
 
-  const pathname = usePathname();
-  useEffect(() => {
-    const currentPath = pathname.split("/")[1];
-    const title = `ReeruAI - ${
-      currentPath.charAt(0).toUpperCase() + currentPath.slice(1)
-    }`;
-    document.title = title;
-  }, [pathname]);
-
   const displayVideos =
     showVideos || hasLoadedRecommendations
       ? streamedVideos.length > 0
@@ -782,6 +754,12 @@ export default function Dashboard() {
           setVideoResult(null);
         }}
         videoData={videoResult}
+      />
+
+      <AlertModal
+        isOpen={showAlertModal}
+        onClose={() => setShowAlertModal(false)}
+        message={alertMessage}
       />
 
       <div className="min-h-screen bg-gradient-to-b from-[#1D1D1D] to-black text-white relative">
@@ -817,8 +795,6 @@ export default function Dashboard() {
             onSubmit={handleSubmitUrl}
             onCheckProgress={handleCheckProgress}
             isProcessing={processingState.isProcessing}
-            error={urlError}
-            setError={setUrlError}
           />
 
           {/* Trending Videos Section */}

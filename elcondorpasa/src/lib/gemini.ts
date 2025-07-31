@@ -1,5 +1,16 @@
 import { redis } from "@/db/config/redis";
 import { GoogleGenAI } from "@google/genai";
+import {
+  CachedVideo,
+  VideoPool,
+  UserDayCache,
+  VideoSearchResult,
+  YouTubeSearchResponse,
+  YouTubeVideoDetailsResponse,
+  YouTubeSearchItem,
+  YouTubeVideoDetails,
+  HtmlEntities,
+} from "@/types";
 
 // Initialize services
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
@@ -17,35 +28,11 @@ const POOL_REFRESH_THRESHOLD = 10; // Minimum videos needed in pool
 const MAX_SEARCH_ATTEMPTS = 3; // Maximum attempts to find new videos
 const MIN_ACCEPTABLE_VIDEOS = 3; // Minimum videos to return (relax if needed)
 
-// Types
-interface CachedVideo {
-  title: string;
-  creator: string;
-  thumbnailUrl: string;
-  videoUrl: string;
-  viewCount: number;
-  duration: string;
-  reasoning: string;
-  videoId: string;
-}
-
-interface VideoPool {
-  videos: CachedVideo[];
-  timestamp: number;
-  query: string;
-}
-
-interface UserDayCache {
-  videos: CachedVideo[];
-  refreshCount: number;
-  date: string;
-}
-
 /**
  * Decode HTML entities in text
  */
 function decodeHtmlEntities(text: string): string {
-  const entities: { [key: string]: string } = {
+  const entities: HtmlEntities = {
     "&amp;": "&",
     "&lt;": "<",
     "&gt;": ">",
@@ -62,11 +49,10 @@ function decodeHtmlEntities(text: string): string {
     return entities[entity] || entity;
   });
 }
-
 /**
  * Check if content is likely from India based on various indicators
  */
-function isLikelyIndianContent(video: any): boolean {
+function isLikelyIndianContent(video: VideoSearchResult): boolean {
   const indicators = [
     // Hindi/Indian language indicators
     "hindi",
@@ -405,7 +391,7 @@ Return ONLY the search query, no explanation.`;
 async function searchYouTubeWithRelaxedCriteria(
   query: string,
   attemptNumber: number = 1
-): Promise<any[]> {
+): Promise<VideoSearchResult[]> {
   const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
   if (!YOUTUBE_API_KEY) {
     throw new Error("YOUTUBE_API_KEY environment variable is required");
@@ -436,12 +422,12 @@ async function searchYouTubeWithRelaxedCriteria(
     throw new Error(`YouTube API error: ${searchResponse.status}`);
   }
 
-  const searchData = await searchResponse.json();
+  const searchData: YouTubeSearchResponse = await searchResponse.json();
   const videos = searchData.items || [];
 
   if (videos.length === 0) return [];
 
-  const videoIds = videos.map((v: any) => v.id.videoId).join(",");
+  const videoIds = videos.map((v: YouTubeSearchItem) => v.id.videoId).join(",");
   const detailsUrl =
     `https://www.googleapis.com/youtube/v3/videos?` +
     `part=contentDetails,statistics&id=${videoIds}&key=${YOUTUBE_API_KEY}`;
@@ -451,14 +437,16 @@ async function searchYouTubeWithRelaxedCriteria(
     throw new Error(`YouTube API error: ${detailsResponse.status}`);
   }
 
-  const detailsData = await detailsResponse.json();
+  const detailsData: YouTubeVideoDetailsResponse = await detailsResponse.json();
   const videoDetails = detailsData.items || [];
 
   return videos
-    .map((video: any) => {
-      const details = videoDetails.find((d: any) => d.id === video.id.videoId);
+    .map((video: YouTubeSearchItem): VideoSearchResult => {
+      const details = videoDetails.find(
+        (d: YouTubeVideoDetails) => d.id === video.id.videoId
+      );
       const durationMinutes = details
-        ? parseDurationToMinutes(details.contentDetails.duration)
+        ? parseDurationToMinutes(details.contentDetails?.duration || "PT0M")
         : 0;
       const viewCount = parseInt(details?.statistics?.viewCount || "0");
 
@@ -480,7 +468,7 @@ async function searchYouTubeWithRelaxedCriteria(
       };
     })
     .filter(
-      (video: any) =>
+      (video: VideoSearchResult) =>
         video.durationMinutes >= minDuration &&
         video.durationMinutes <= MAX_DURATION_MINUTES &&
         video.viewCount >= minViews &&
@@ -492,7 +480,7 @@ async function searchYouTubeWithRelaxedCriteria(
  * Analyze videos with Gemini
  */
 async function analyzeVideoWithGemini(
-  video: any,
+  video: VideoSearchResult,
   contentPreference: string
 ): Promise<string> {
   const prompt = `Analyze this YouTube podcast and explain why it's valuable for someone interested in ${contentPreference}.
@@ -520,7 +508,7 @@ Be specific and enthusiastic. Response only with the reasoning text.`;
         video.creator
       } has attracted ${video.viewCount.toLocaleString()} views, indicating strong audience engagement with ${contentPreference} content.`
     );
-  } catch (error) {
+  } catch {
     return `This trending podcast from ${video.creator} offers ${
       video.durationMinutes
     } minutes of ${contentPreference} content, with ${video.viewCount.toLocaleString()} views demonstrating its popularity and relevance.`;
@@ -615,8 +603,8 @@ export async function* getYouTubeRecommendations(
       yield ` Need more videos. Fetching fresh content...\n\n`;
 
       let searchAttempt = 1;
-      let totalAnalyzedVideos: CachedVideo[] = [];
-      let allSeenVideoIds = new Set(seenVideoIds);
+      const totalAnalyzedVideos: CachedVideo[] = [];
+      const allSeenVideoIds = new Set(seenVideoIds);
 
       while (
         searchAttempt <= MAX_SEARCH_ATTEMPTS &&
