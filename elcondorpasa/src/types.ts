@@ -1,3 +1,9 @@
+// Telegram user state for bot manager
+export interface TelegramUserState {
+  step: "waiting_email" | "waiting_otp";
+  email?: string;
+  expiresAt?: Date;
+}
 import { LucideIcon } from "lucide-react";
 import { ObjectId } from "mongodb";
 

@@ -12,12 +12,12 @@ export async function GET() {
       success: true,
       message: "Daily reminder test executed successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Cron test error:", error);
     return NextResponse.json(
       {
         success: false,
-        message: error.message,
+        message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
@@ -64,9 +64,12 @@ export async function POST(request: Request) {
           { status: 400 }
         );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error.message },
+      {
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

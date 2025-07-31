@@ -23,13 +23,14 @@ export async function POST(req: Request) {
 
     // Exclude sensitive fields from the response
     const {
-      password,
-      phone,
-      telegram,
-      reeruToken,
-      _id,
+      password: _password,
+      phone: _phone,
+      telegram: _telegram,
+      reeruToken: _reeruToken,
+      _id: _id,
       ...userWithoutSensitiveData
     } = newUser;
+
     return Response.json(userWithoutSensitiveData);
   } catch (error) {
     return errorHandler(error);

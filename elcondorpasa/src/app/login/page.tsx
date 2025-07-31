@@ -19,7 +19,27 @@ import Link from "next/link";
 
 declare global {
   interface Window {
-    google: any;
+    google: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential: string }) => void;
+          }) => void;
+          renderButton: (
+            element: HTMLElement | null,
+            options: {
+              theme?: string;
+              size?: string;
+              text?: string;
+              shape?: string;
+              width?: string;
+            }
+          ) => void;
+          prompt: () => void;
+        };
+      };
+    };
   }
 }
 
@@ -550,7 +570,7 @@ export default function LoginPage() {
               className="flex items-center justify-center text-sm mt-8 text-center"
             >
               <span className="text-gray-300">
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <Link
                   href="/register"
                   className="text-pink-400 hover:text-pink-300 font-medium transition-colors duration-300"

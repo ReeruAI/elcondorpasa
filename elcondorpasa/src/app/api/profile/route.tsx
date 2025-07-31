@@ -1,6 +1,16 @@
 import UserModel from "@/db/models/UserModel";
 import { NextResponse } from "next/server";
 
+// Define a custom error interface for better type safety
+interface CustomError extends Error {
+  status?: number;
+}
+
+// Type guard to check if error has status property
+function isCustomError(error: unknown): error is CustomError {
+  return error instanceof Error && "status" in error;
+}
+
 // GET: Get user profile by userId
 export async function GET(req: Request) {
   try {
@@ -17,18 +27,20 @@ export async function GET(req: Request) {
     });
   } catch (error) {
     console.error("Error getting user profile:", error);
-    const err = error as any;
 
     // Handle the specific 404 error from getUserProfile
-    if (err.status === 404) {
+    if (isCustomError(error) && error.status === 404) {
       return NextResponse.json(
-        { success: false, error: err.message },
+        { success: false, error: error.message },
         { status: 404 }
       );
     }
 
+    // Handle other errors
+    const errorMessage =
+      error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json(
-      { success: false, error: err.message || "Internal server error" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

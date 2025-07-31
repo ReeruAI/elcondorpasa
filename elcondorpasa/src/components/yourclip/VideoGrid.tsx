@@ -1,5 +1,5 @@
 // components/VideoGrid.tsx
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { VideoShort } from "@/types"; // Adjust the import path as necessary
@@ -45,7 +45,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({ videos, onVideoClick }) => {
   }, []);
 
   // Check scroll position for showing/hiding navigation buttons and updating indicators
-  const checkScrollPosition = () => {
+  const checkScrollPosition = useCallback(() => {
     if (!scrollContainerRef.current) return;
 
     const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
@@ -61,7 +61,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({ videos, onVideoClick }) => {
     const cardWidth = clientWidth / cardsPerView;
     const currentPage = Math.round(scrollLeft / (cardWidth * cardsPerView));
     setActiveIndicator(currentPage);
-  };
+  }, [cardsPerView]);
 
   // Initialize scroll position
   useEffect(() => {
@@ -90,7 +90,7 @@ const VideoGrid: React.FC<VideoGridProps> = ({ videos, onVideoClick }) => {
       container.removeEventListener("scroll", checkScrollPosition);
       window.removeEventListener("resize", handleResize);
     };
-  }, [cardsPerView, videos.length]);
+  }, [cardsPerView, videos.length, checkScrollPosition]);
 
   const scroll = (direction: "left" | "right") => {
     if (!scrollContainerRef.current) return;
@@ -146,7 +146,6 @@ const VideoGrid: React.FC<VideoGridProps> = ({ videos, onVideoClick }) => {
   const getCardWidth = () => {
     const gap = 16; // 4 * 4px (gap-4)
     const totalGaps = (cardsPerView - 1) * gap;
-    const containerPadding = 0; // No padding now since we're centering
 
     return `calc((100% - ${totalGaps}px) / ${cardsPerView})`;
   };

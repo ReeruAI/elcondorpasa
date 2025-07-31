@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 import { database } from "@/db/config/mongodb";
 import { ObjectId } from "mongodb";
+import { Readable } from "stream";
+
+// Define proper types
+interface YouTubeUser {
+  _id: ObjectId;
+  youtube?: {
+    accessToken: string;
+    refreshToken: string;
+    expiryDate: number;
+    uploads?: Array<{
+      videoId: string;
+      title: string;
+      uploadedAt: Date;
+    }>;
+  };
+}
+
+interface YouTubeError extends Error {
+  code?: number;
+}
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.YOUTUBE_CLIENT_ID,
@@ -20,7 +40,7 @@ async function refreshAccessToken(
   const { credentials } = await oauth2Client.refreshAccessToken();
 
   // Update stored tokens
-  const usersCollection = database.collection("users");
+  const usersCollection = database.collection<YouTubeUser>("users");
   await usersCollection.updateOne(
     { _id: new ObjectId(userId) },
     {
@@ -44,10 +64,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const usersCollection = database.collection("users");
-    const user = (await usersCollection.findOne({
+    const usersCollection = database.collection<YouTubeUser>("users");
+    const user = await usersCollection.findOne({
       _id: new ObjectId(userId),
-    })) as any;
+    });
 
     if (!user || !user.youtube || !user.youtube.refreshToken) {
       return NextResponse.json(
@@ -73,9 +93,7 @@ export async function POST(request: NextRequest) {
 
     // Convert File to stream
     const buffer = Buffer.from(await videoFile.arrayBuffer());
-    const stream = require("stream");
-    const bufferStream = new stream.PassThrough();
-    bufferStream.end(buffer);
+    const bufferStream = Readable.from(buffer);
 
     const accessToken = await refreshAccessToken(
       userId,
@@ -97,7 +115,7 @@ export async function POST(request: NextRequest) {
         categoryId: "22", // People & Blogs category
       },
       status: {
-        privacyStatus: "public",
+        privacyStatus: "public" as const,
         selfDeclaredMadeForKids: false,
       },
     };
@@ -117,21 +135,26 @@ export async function POST(request: NextRequest) {
       uploadedAt: new Date(),
     };
 
-    await usersCollection.updateOne({ _id: new ObjectId(userId) }, {
-      $push: {
-        "youtube.uploads": uploadData,
-      },
-    } as any);
+    await usersCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      {
+        $push: {
+          "youtube.uploads": uploadData,
+        },
+      }
+    );
 
     return NextResponse.json({
       success: true,
       videoId: response.data.id!,
       videoUrl: `https://youtube.com/watch?v=${response.data.id}`,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error uploading to YouTube:", error);
 
-    if (error.code === 401) {
+    const youtubeError = error as YouTubeError;
+
+    if (youtubeError.code === 401) {
       return NextResponse.json(
         {
           success: false,
@@ -139,7 +162,7 @@ export async function POST(request: NextRequest) {
         },
         { status: 401 }
       );
-    } else if (error.code === 403) {
+    } else if (youtubeError.code === 403) {
       return NextResponse.json(
         {
           success: false,
