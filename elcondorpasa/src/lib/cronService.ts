@@ -1,9 +1,10 @@
 import * as cron from "node-cron";
 import NotificationService from "./notificationService";
 import UserModel from "@/db/models/UserModel";
-import HistoryModel, { History, Video } from "@/db/models/HistoryModel";
+import HistoryModel, { History } from "@/db/models/HistoryModel";
 import PreferenceModel from "@/db/models/PreferenceModel";
 import { getYouTubeRecommendations } from "./gemini";
+import type { CachedVideo } from "@/types";
 
 class CronService {
   private static instance: CronService;
@@ -139,7 +140,7 @@ class CronService {
       );
 
       const userHistory = await HistoryModel.getHistoryByUserId(userId, 1, 0);
-      let needsNewRecommendations = true;
+      const needsNewRecommendations = true;
 
       if (userHistory && userHistory.length > 0) {
         const latestHistory = userHistory[0];
@@ -166,7 +167,7 @@ class CronService {
         const { contentPreference, languagePreference } =
           await this.getUserPreferences(userId);
 
-        const collectedVideos: any[] = [];
+        const collectedVideos: CachedVideo[] = [];
         const streamGenerator = getYouTubeRecommendations(
           userId,
           contentPreference,

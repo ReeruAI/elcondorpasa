@@ -26,10 +26,20 @@ export async function GET(req: Request) {
     });
   } catch (error) {
     console.error("Error getting preference:", error);
-    const err = error as Error;
+    const err =
+      error instanceof Error
+        ? error
+        : { message: "Unknown error", status: 400 };
     return NextResponse.json(
       { success: false, error: err.message },
-      { status: 400 }
+      {
+        status:
+          typeof err === "object" &&
+          "status" in err &&
+          typeof (err as { status?: unknown }).status === "number"
+            ? (err as { status: number }).status
+            : 400,
+      }
     );
   }
 }
@@ -64,10 +74,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, insertedId });
   } catch (error) {
     console.error("Error creating preference:", error);
-    const err = error as any;
+    const err =
+      error instanceof Error
+        ? error
+        : { message: "Unknown error", status: 400 };
     return NextResponse.json(
       { success: false, error: err.message },
-      { status: err.status || 400 }
+      {
+        status:
+          typeof err === "object" &&
+          "status" in err &&
+          typeof (err as { status?: unknown }).status === "number"
+            ? (err as { status: number }).status
+            : 400,
+      }
     );
   }
 }
@@ -111,10 +131,20 @@ export async function PUT(req: Request) {
     }
   } catch (error) {
     console.error("Error updating/creating preference:", error);
-    const err = error as any;
+    const err =
+      error instanceof Error
+        ? error
+        : { message: "Unknown error", status: 400 };
     return NextResponse.json(
       { success: false, error: err.message },
-      { status: err.status || 400 }
+      {
+        status:
+          typeof err === "object" &&
+          "status" in err &&
+          typeof (err as { status?: unknown }).status === "number"
+            ? (err as { status: number }).status
+            : 400,
+      }
     );
   }
 }
@@ -139,10 +169,20 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ success: true, deletedCount });
   } catch (error) {
     console.error("Error deleting preference:", error);
-    const err = error as Error;
+    const err =
+      error instanceof Error
+        ? error
+        : { message: "Unknown error", status: 400 };
     return NextResponse.json(
       { success: false, error: err.message },
-      { status: 400 }
+      {
+        status:
+          typeof err === "object" &&
+          "status" in err &&
+          typeof (err as { status?: unknown }).status === "number"
+            ? (err as { status: number }).status
+            : 400,
+      }
     );
   }
 }
