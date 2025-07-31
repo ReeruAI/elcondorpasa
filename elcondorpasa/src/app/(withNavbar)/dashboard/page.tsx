@@ -15,6 +15,8 @@ import { StreamingProgress } from "@/components/dashboard/StreamingProgress";
 import { UrlInputSection } from "@/components/dashboard/UrlInputSection";
 import { VideoCarousel } from "@/components/dashboard/VideoCarousel";
 import { EmptyState } from "@/components/dashboard/EmptyState";
+import { useTokens } from "@/components/Navbar";
+import { AlertModal } from "@/components/dashboard/AlertModal";
 import ParticleBackground from "@/components/yourclip/ParticleBackground";
 
 // Types
@@ -72,6 +74,10 @@ export default function Dashboard() {
   const [refreshLimitMessage, setRefreshLimitMessage] = useState("");
   const [hasLoadedRecommendations, setHasLoadedRecommendations] =
     useState(false);
+
+  const { tokens, updateTokens } = useTokens();
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertMessage, setAlertMessage] = useState("");
 
   // Klap processing states
   const [processingState, setProcessingState] = useState<ProcessingState>({
@@ -477,6 +483,14 @@ export default function Dashboard() {
     e.preventDefault();
     if (!url.trim() || processingState.isProcessing) return;
 
+    if (tokens <= 0) {
+      setAlertMessage(
+        "You don't have enough tokens to generate a clip. Please top up your account to continue."
+      );
+      setShowAlertModal(true);
+      return;
+    }
+
     setIsLoading(true);
     setShowLoadingModal(true);
 
@@ -518,7 +532,7 @@ export default function Dashboard() {
           saveProcessingState(updatedState);
         },
         // onComplete
-        (data: KlapStreamData) => {
+        async (data: KlapStreamData) => {
           clearProcessingState();
           setProcessingState({
             isProcessing: false,
@@ -526,6 +540,8 @@ export default function Dashboard() {
             message: "Successfully completed!",
             status: "completed",
           });
+
+          updateTokens(tokens - 1);
 
           // Save the result if needed
           if (data.short) {
@@ -571,6 +587,14 @@ export default function Dashboard() {
   const handleGenerateClip = async (videoUrl: string) => {
     if (processingState.isProcessing) return;
 
+    if (tokens <= 0) {
+      setAlertMessage(
+        "You don't have enough tokens to generate a clip. Please top up your account to continue."
+      );
+      setShowAlertModal(true);
+      return;
+    }
+
     setUrl(videoUrl);
     setShowLoadingModal(true);
 
@@ -612,7 +636,7 @@ export default function Dashboard() {
           saveProcessingState(updatedState);
         },
         // onComplete
-        (data: KlapStreamData) => {
+        async (data: KlapStreamData) => {
           clearProcessingState();
           setProcessingState({
             isProcessing: false,
@@ -620,6 +644,8 @@ export default function Dashboard() {
             message: "Successfully completed!",
             status: "completed",
           });
+
+          updateTokens(tokens - 1);
 
           if (data.short) {
             const result: VideoResult = {
@@ -730,6 +756,12 @@ export default function Dashboard() {
         videoData={videoResult}
       />
 
+      <AlertModal
+        isOpen={showAlertModal}
+        onClose={() => setShowAlertModal(false)}
+        message={alertMessage}
+      />
+
       <div className="min-h-screen bg-gradient-to-b from-[#1D1D1D] to-black text-white relative">
         <ParticleBackground />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
@@ -742,9 +774,9 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center"
               >
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-pink-200 to-pink-600 bg-clip-text text-transparent mb-4">
                   Dash
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-300 to-pink-400">
+                  <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
                     board
                   </span>
                 </h1>

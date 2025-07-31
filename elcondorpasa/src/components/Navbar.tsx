@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, User, LogOut, Coins } from "lucide-react";
+import { Menu, X, User, LogOut, Coins, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 // import { clearUserRecommendationData } from "@/app/(withNavbar)/dashboard/page";
@@ -15,9 +15,11 @@ import Image from "next/image";
 
 interface TokenContextType {
   tokens: number;
+  email: string | null;
   updateTokens: (newTokens: number) => void;
+  updateEmail: (email: string | null) => void;
   addTokens: (amount: number) => void;
-  refreshTokens: () => Promise<void>;
+  refreshUserData: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -25,10 +27,11 @@ const TokenContext = createContext<TokenContextType | undefined>(undefined);
 
 export function TokenProvider({ children }: { children: React.ReactNode }) {
   const [tokens, setTokens] = useState<number>(0);
+  const [email, setEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const hasLoadedTokens = useRef(false);
+  const hasLoadedData = useRef(false);
 
-  const refreshTokens = useCallback(async () => {
+  const refreshUserData = useCallback(async () => {
     if (isLoading || !document.cookie.includes("isLoggedIn=true")) return;
 
     try {
@@ -40,10 +43,11 @@ export function TokenProvider({ children }: { children: React.ReactNode }) {
 
       if (response.data?.success && response.data?.user) {
         setTokens(response.data.user.reeruToken || 0);
-        hasLoadedTokens.current = true;
+        setEmail(response.data.user.email || null);
+        hasLoadedData.current = true;
       }
     } catch (error) {
-      console.error("Error fetching user tokens:", error);
+      console.error("Error fetching user data:", error);
     } finally {
       setIsLoading(false);
     }
@@ -53,23 +57,32 @@ export function TokenProvider({ children }: { children: React.ReactNode }) {
     setTokens(newTokens);
   }, []);
 
+  const updateEmail = useCallback((email: string | null) => {
+    setEmail(email);
+  }, []);
+
   const addTokens = useCallback((amount: number) => {
     setTokens((prev) => prev + amount);
   }, []);
 
   // Initial load
   useEffect(() => {
-    if (
-      !hasLoadedTokens.current &&
-      document.cookie.includes("isLoggedIn=true")
-    ) {
-      refreshTokens();
+    if (!hasLoadedData.current && document.cookie.includes("isLoggedIn=true")) {
+      refreshUserData();
     }
-  }, [refreshTokens]);
+  }, [refreshUserData]);
 
   return (
     <TokenContext.Provider
-      value={{ tokens, updateTokens, addTokens, refreshTokens, isLoading }}
+      value={{
+        tokens,
+        email,
+        updateTokens,
+        updateEmail,
+        addTokens,
+        refreshUserData: refreshUserData,
+        isLoading,
+      }}
     >
       {children}
     </TokenContext.Provider>
@@ -117,7 +130,11 @@ export default function Navbar() {
   const lastScrollRef = useRef(0);
 
   // Use token context
-  const { tokens: userTokens, isLoading: isLoadingTokens } = useTokens();
+  const {
+    tokens: userTokens,
+    email: userEmail,
+    isLoading: isLoadingTokens,
+  } = useTokens();
 
   const navLinks = useMemo(
     () => [
@@ -372,17 +389,30 @@ export default function Navbar() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg"
+                        className="absolute right-0 mt-2 w-56 rounded-lg shadow-lg"
                         style={{
-                          backgroundColor: "rgba(31, 31, 31, 0.7)",
+                          backgroundColor: "rgba(31, 31, 31, 0.9)",
                           backdropFilter: "blur(20px)",
                           WebkitBackdropFilter: "blur(20px)",
                           border: "1px solid rgba(255, 255, 255, 0.1)",
                         }}
                       >
+                        {/* Email Display */}
+                        <div className="px-4 py-3 border-b border-white/10">
+                          <div className="flex items-center space-x-3">
+                            <Mail className="w-4 h-4 text-gray-400" />
+                            <p className="text-sm text-gray-300 truncate">
+                              {isLoadingTokens
+                                ? "Loading..."
+                                : userEmail || "No email"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Logout Button */}
                         <button
                           onClick={handleLogout}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors rounded-lg"
+                          className="flex items-center w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors rounded-b-lg"
                         >
                           <LogOut className="w-4 h-4 mr-3" />
                           Logout
@@ -454,7 +484,14 @@ export default function Navbar() {
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-r from-[#ec4899] to-[#a855f3] flex items-center justify-center">
                           <User className="w-5 h-5 text-white" />
                         </div>
-                        <TokenDisplay compact />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-400 truncate">
+                            {isLoadingTokens
+                              ? "Loading..."
+                              : userEmail || "No email"}
+                          </p>
+                          <TokenDisplay compact />
+                        </div>
                       </div>
                     </div>
                     <button

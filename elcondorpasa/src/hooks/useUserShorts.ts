@@ -10,7 +10,7 @@ interface UseUserShortsReturn {
 }
 
 export const useUserShorts = (): UseUserShortsReturn => {
-  const [shorts, setShorts] = useState<VideoShort[]>([]);
+  const [shorts] = useState<VideoShort[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 

@@ -153,3 +153,10 @@ body {
   box-shadow: 0 15px 40px rgba(236, 72, 153, 0.4);
   transform: translateY(-2px);
 }
+
+.alert-modal-bg {
+  background-color: rgba(31, 31, 31, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
