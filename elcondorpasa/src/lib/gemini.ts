@@ -4,7 +4,6 @@ import {
   CachedVideo,
   VideoPool,
   UserDayCache,
-  RefreshStatus,
   VideoSearchResult,
   YouTubeSearchResponse,
   YouTubeVideoDetailsResponse,
