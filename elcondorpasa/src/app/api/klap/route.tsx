@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import KlapModel from "@/db/models/KlapModel";
-
+import {
+  SSEUpdateData,
+  TaskPayload,
+  TaskResponse,
+  PollResponse,
+  KlapShort,
+  ExportResponse,
+  ProjectResponse,
+} from "@/types";
 const KLAP_API_KEY = process.env.KLAP_API_KEY as string;
 
 export async function POST(request: NextRequest) {
@@ -143,7 +151,7 @@ export async function POST(request: NextRequest) {
         };
 
         // Helper function to send SSE data with proper await
-        const sendUpdate = async (data: any) => {
+        const sendUpdate = async (data: SSEUpdateData) => {
           try {
             const timestamp = new Date().toISOString();
             const message = `data: ${JSON.stringify({
@@ -227,7 +235,7 @@ export async function POST(request: NextRequest) {
             progress: 10,
           });
 
-          const taskPayload = {
+          const taskPayload: TaskPayload = {
             source_video_url: video_url,
             target_clip_count: 1,
             max_clip_count: 1,
@@ -274,7 +282,7 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          const taskData = await taskResponse.json();
+          const taskData: TaskResponse = await taskResponse.json();
           console.log("📋 Task data received:", taskData);
 
           if (!taskResponse.ok) {
@@ -331,7 +339,7 @@ export async function POST(request: NextRequest) {
 
           // 2. Poll for task completion
           let status = "processing";
-          let result: any = null;
+          let result: PollResponse | null = null;
           const maxRetries = 120;
           const delay = (ms: number) =>
             new Promise((res) => setTimeout(res, ms));
@@ -372,7 +380,7 @@ export async function POST(request: NextRequest) {
               continue;
             }
 
-            const pollData = await pollRes.json();
+            const pollData: PollResponse = await pollRes.json();
             console.log(`📊 Poll data status: ${pollData.status}`);
 
             if (!pollRes.ok) {
@@ -402,7 +410,7 @@ export async function POST(request: NextRequest) {
               await sendUpdate({
                 status: "error",
                 message: "Task processing failed",
-                error: pollData,
+                error: JSON.stringify(pollData),
               });
               await clearProcessingFlag();
               controller.close();
@@ -425,10 +433,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Extract output_id (folder_id in this case)
-          const output_id = result.output_id;
-          console.log("📁 Output ID:", output_id);
-
-          if (!output_id) {
+          if (!result || !result.output_id) {
             console.error("❌ No output_id in result:", result);
             await sendUpdate({
               status: "error",
@@ -439,6 +444,8 @@ export async function POST(request: NextRequest) {
             controller.close();
             return;
           }
+          const output_id = result.output_id;
+          console.log("📁 Output ID:", output_id);
 
           // 3. Fetch project data - IT RETURNS AN ARRAY!
           console.log("🎥 Fetching project data for:", output_id);
@@ -450,8 +457,8 @@ export async function POST(request: NextRequest) {
           });
 
           // Sometimes shorts generation takes extra time, let's retry a few times
-          let shorts: any[] = [];
-          let rawResponse: any = null;
+          let shorts: KlapShort[] = [];
+          let rawResponse: ProjectResponse | KlapShort[] | null = null;
           const maxFetchRetries = 5; // Increase retries
 
           for (
@@ -612,7 +619,7 @@ export async function POST(request: NextRequest) {
 
           // Sort by virality score and take the best one
           const sortedShorts = shorts.sort(
-            (a: any, b: any) =>
+            (a: KlapShort, b: KlapShort) =>
               (b.virality_score || 0) - (a.virality_score || 0)
           );
 
@@ -670,7 +677,7 @@ export async function POST(request: NextRequest) {
               throw new Error(`Export creation failed: ${errorText}`);
             }
 
-            const exportData = await exportRes.json();
+            const exportData: ExportResponse = await exportRes.json();
             const exportId = exportData.id;
             console.log("✅ Export created with ID:", exportId);
 
@@ -683,7 +690,7 @@ export async function POST(request: NextRequest) {
 
             // Poll until export is done
             let exportStatus = "processing";
-            let exportResult = null;
+            let exportResult: ExportResponse | null = null;
             const maxExportRetries = 60;
 
             console.log("🔄 Starting export polling");

@@ -4,6 +4,7 @@ import { preferenceSchema } from "@/schemas";
 
 import HistoryModel from "@/db/models/HistoryModel";
 import { getYouTubeRecommendations } from "@/lib/gemini";
+import { CachedVideo } from "@/types";
 
 const encoder = new TextEncoder();
 
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const collectedVideos: any[] = [];
+          const collectedVideos: CachedVideo[] = [];
           let isExhaustedRefresh = false; // Track if this is an exhausted refresh
 
           // Get recommendations (with caching and deduplication)
