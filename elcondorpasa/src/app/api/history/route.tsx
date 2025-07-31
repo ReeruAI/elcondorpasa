@@ -103,14 +103,14 @@ export async function DELETE(request: NextRequest) {
       message: "All history cleared",
       deletedCount,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("History delete error:", error);
     return NextResponse.json(
       {
         error: "Failed to delete history",
-        message: error.message || "Unknown error",
+        message: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: error.status || 500 }
+      { status: 500 }
     );
   }
 }
