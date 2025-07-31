@@ -3,12 +3,19 @@ import { NextRequest } from "next/server";
 import { verifyToken } from "./helpers/jwt";
 
 // Define route groups
-const PROTECTED_ROUTES = ["/dashboard", "/preferences"];
+const PROTECTED_ROUTES = [
+  "/dashboard",
+  "/preferences",
+  "/your-clip",
+  "/top-up",
+  "/telegram-service",
+];
 const AUTH_ROUTES = ["/login", "/register"];
 const API_ROUTES = [
   "/api/preferences",
   "/api/profile",
   "/api/telegram/generate-otp",
+  "/api/history",
 ];
 const OPTIONAL_AUTH_ROUTES = ["/api/gemini", "/api/midtrans"];
 
@@ -157,6 +164,9 @@ export const config = {
     // Protected routes
     "/dashboard/:path*",
     "/preferences/:path*",
+    "/your-clip/:path*",
+    "/top-up/:path*",
+    "/telegram-service/:path*",
     // Auth routes
     "/login",
     "/register",
