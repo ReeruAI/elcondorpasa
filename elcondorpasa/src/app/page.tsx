@@ -262,7 +262,7 @@ const TESTIMONIALS: Testimonial[] = [
 ];
 
 const FINAL_STATS: Stat[] = [
-  { icon: Clock, text: "60-second generation" },
+  { icon: Clock, text: "No Hassle" },
   { icon: Globe, text: "Multi-language support" },
   { icon: Users, text: "10,000+ creators" },
 ];
@@ -445,7 +445,12 @@ export default function Home() {
           {/* How It Works */}
           <Section id="how-it-works" bgColor="secondary">
             <div className="max-w-6xl mx-auto w-full">
-              <Heading>How It Works</Heading>
+              <Heading>
+                How It{" "}
+                <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                  Works
+                </span>
+              </Heading>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mb-8 sm:mb-12">
                 {STEPS.map((step, index) => (
@@ -517,7 +522,11 @@ export default function Home() {
             <div className="container mx-auto px-4">
               <FadeInView className="text-center mb-12 sm:mb-16">
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 text-white">
-                  See the Magic in Action
+                  See the{" "}
+                  <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                    Magic
+                  </span>{" "}
+                  in Action
                 </h2>
                 <p className="text-base sm:text-xl text-gray-300 max-w-2xl mx-auto px-4">
                   Watch how Reeru AI transforms long videos into engaging shorts
@@ -585,7 +594,10 @@ export default function Home() {
           <Section id="pricing" bgColor="secondary">
             <div className="max-w-6xl mx-auto w-full">
               <Heading subtitle="Pay as you grow • No subscriptions">
-                Simple Token Pricing
+                <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                  Simple
+                </span>{" "}
+                Token Pricing
               </Heading>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
@@ -695,7 +707,12 @@ export default function Home() {
           {/* Why Reeru */}
           <Section id="features" bgColor="primary">
             <div className="max-w-6xl mx-auto w-full">
-              <Heading>Why Reeru?</Heading>
+              <Heading>
+                Why{" "}
+                <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                  Reeru?
+                </span>
+              </Heading>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {FEATURES.map((feature, index) => (
@@ -745,7 +762,10 @@ export default function Home() {
             <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
               <div className="max-w-4xl mx-auto w-full">
                 <Heading className="pt-10 relative z-10">
-                  Creators Love Reeru
+                  Creators{" "}
+                  <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                    Love Reeru
+                  </span>
                 </Heading>
 
                 <div className="space-y-4 sm:space-y-6">
@@ -800,7 +820,7 @@ export default function Home() {
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true, margin: "-100px" }}
                   transition={{ duration: 0.6 }}
-                  className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 text-white"
+                  className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent pb-2"
                 >
                   Start Creating Shorts in Minutes
                 </motion.h2>

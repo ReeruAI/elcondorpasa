@@ -95,6 +95,7 @@ export default function Dashboard() {
   // Video result state
   const [videoResult, setVideoResult] = useState<VideoResult | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   const router = useRouter();
   const trendingSliderRef = useRef<HTMLDivElement>(
@@ -489,6 +490,7 @@ export default function Dashboard() {
     if (!url.trim() || processingState.isProcessing) return;
 
     setIsLoading(true);
+    setUrlError(null); // Clear any previous errors
     setShowLoadingModal(true);
 
     const newProcessingState: ProcessingState = {
@@ -509,8 +511,23 @@ export default function Dashboard() {
         body: JSON.stringify({ video_url: url }),
       });
 
+      // Check if response is not ok
       if (!response.ok) {
-        throw new Error("Failed to start processing");
+        const errorData = await response.json();
+        setUrlError(errorData.error || "Failed to start processing");
+        setShowLoadingModal(false);
+
+        // Clear processing state on error
+        clearProcessingState();
+        setProcessingState({
+          isProcessing: false,
+          progress: 0,
+          message: "",
+          status: "idle",
+        });
+
+        setIsLoading(false);
+        return;
       }
 
       await processKlapStream(
@@ -561,6 +578,7 @@ export default function Dashboard() {
             message: error,
             status: "error",
           });
+          setUrlError(error);
           console.error("Klap processing error:", error);
         }
       );
@@ -573,6 +591,7 @@ export default function Dashboard() {
         message: "Failed to process video",
         status: "error",
       });
+      setUrlError("Failed to process video. Please try again.");
       setShowLoadingModal(false);
     } finally {
       setIsLoading(false);
@@ -583,6 +602,7 @@ export default function Dashboard() {
     if (processingState.isProcessing) return;
 
     setUrl(videoUrl);
+    setUrlError(null); // Clear any previous errors
     setShowLoadingModal(true);
 
     const newProcessingState: ProcessingState = {
@@ -604,7 +624,19 @@ export default function Dashboard() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to start processing");
+        const errorData = await response.json();
+        setUrlError(errorData.error || "Failed to start processing");
+        setShowLoadingModal(false);
+
+        clearProcessingState();
+        setProcessingState({
+          isProcessing: false,
+          progress: 0,
+          message: "",
+          status: "idle",
+        });
+
+        return;
       }
 
       await processKlapStream(
@@ -654,6 +686,7 @@ export default function Dashboard() {
             message: error,
             status: "error",
           });
+          setUrlError(error);
           console.error("Klap processing error:", error);
         }
       );
@@ -666,6 +699,7 @@ export default function Dashboard() {
         message: "Failed to process video",
         status: "error",
       });
+      setUrlError("Failed to process video. Please try again.");
       setShowLoadingModal(false);
     }
   };
@@ -774,6 +808,8 @@ export default function Dashboard() {
             onSubmit={handleSubmitUrl}
             onCheckProgress={handleCheckProgress}
             isProcessing={processingState.isProcessing}
+            error={urlError}
+            setError={setUrlError}
           />
 
           {/* Trending Videos Section */}

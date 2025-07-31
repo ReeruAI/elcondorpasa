@@ -399,9 +399,12 @@ export default function LoginPage() {
             >
               <LogIn className="w-10 h-10 text-white" />
             </motion.div>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white">
-              Welcome back
-            </h2>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-pink-200 to-pink-600 bg-clip-text text-transparent pb-4">
+              Welcome{" "}
+              <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                Back
+              </span>
+            </h1>
             <p className="mt-3 text-base sm:text-lg text-gray-300">
               Sign in to continue creating amazing shorts
             </p>
@@ -549,36 +552,6 @@ export default function LoginPage() {
               </span>
             </motion.div>
           </motion.div>
-
-          {/* Development Info */}
-          {process.env.NODE_ENV === "development" && (
-            <motion.div
-              variants={fadeInVariants}
-              initial="hidden"
-              animate="visible"
-              custom={0.6}
-              className="p-4 rounded-xl opacity-50"
-              style={{
-                backgroundColor: "rgba(59, 130, 246, 0.1)",
-                backdropFilter: "blur(10px)",
-                WebkitBackdropFilter: "blur(10px)",
-                border: "1px solid rgba(59, 130, 246, 0.3)",
-              }}
-            >
-              <h3 className="text-sm font-medium text-blue-400 mb-2">
-                Development Mode
-              </h3>
-              <p className="text-xs text-blue-300/70">
-                Google Sign-In requires NEXT_PUBLIC_GOOGLE_CLIENT_ID in
-                .env.local
-              </p>
-              {!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
-                <p className="text-xs text-red-400 mt-1">
-                  ⚠️ Google Client ID not found
-                </p>
-              )}
-            </motion.div>
-          )}
         </motion.div>
       </div>
     </div>
