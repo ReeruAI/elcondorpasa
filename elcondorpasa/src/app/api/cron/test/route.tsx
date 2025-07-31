@@ -1,8 +1,20 @@
-import CronService from "@/lib/cronService";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
+    // Only initialize CronService in runtime, not during build
+    if (
+      process.env.NEXT_RUNTIME !== "nodejs" ||
+      process.env.NODE_ENV === "test"
+    ) {
+      return NextResponse.json({
+        success: false,
+        message: "CronService not available during build or test",
+      });
+    }
+
+    // Dynamic import to prevent build-time initialization
+    const { default: CronService } = await import("@/lib/cronService");
     const cronService = CronService.getInstance();
 
     // Test daily reminder
@@ -26,7 +38,21 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // Only initialize CronService in runtime, not during build
+    if (
+      process.env.NEXT_RUNTIME !== "nodejs" ||
+      process.env.NODE_ENV === "test"
+    ) {
+      return NextResponse.json({
+        success: false,
+        message: "CronService not available during build or test",
+      });
+    }
+
     const { action } = await request.json();
+
+    // Dynamic import to prevent build-time initialization
+    const { default: CronService } = await import("@/lib/cronService");
     const cronService = CronService.getInstance();
 
     switch (action) {

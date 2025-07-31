@@ -1,5 +1,5 @@
 // src/lib/notificationService.ts
-import TelegramBotManager from "@/lib/telegramBotManager";
+import bot from "@/lib/telegramBot"; // Direct import instead of manager
 import UserModel from "@/db/models/UserModel";
 
 class NotificationService {
@@ -45,8 +45,7 @@ class NotificationService {
           break;
       }
 
-      const botManager = TelegramBotManager.getInstance();
-      const bot = await botManager.getBot();
+      // Use direct bot import
       if (!bot) {
         console.log("❌ Bot not available");
         return false;
@@ -113,8 +112,7 @@ class NotificationService {
           break;
       }
 
-      const botManager = TelegramBotManager.getInstance();
-      const bot = await botManager.getBot();
+      // Use direct bot import
       if (!bot) {
         console.log("❌ Bot not available");
         return false;
@@ -188,8 +186,7 @@ class NotificationService {
           break;
       }
 
-      const botManager = TelegramBotManager.getInstance();
-      const bot = await botManager.getBot();
+      // Use direct bot import
       if (!bot) {
         console.log("❌ Bot not available");
         return false;
@@ -249,19 +246,18 @@ class NotificationService {
         total: telegramUsers.length,
       };
 
-      const botManager = TelegramBotManager.getInstance();
+      // Use direct bot import
+      if (!bot) {
+        console.log("❌ Bot not available for broadcast");
+        return false;
+      }
 
       for (const user of telegramUsers) {
         try {
-          const sent = await botManager.sendNotification(
-            user.telegramChatId,
-            formattedMessage
-          );
-          if (sent) {
-            results.success++;
-          } else {
-            results.failed++;
-          }
+          await bot.sendMessage(user.telegramChatId, formattedMessage, {
+            parse_mode: "HTML",
+          });
+          results.success++;
 
           // Add delay to avoid rate limiting
           await new Promise((resolve) => setTimeout(resolve, 100));
