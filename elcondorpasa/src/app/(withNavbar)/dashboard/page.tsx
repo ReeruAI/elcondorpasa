@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+// import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { TrendingUp, Loader2, History } from "lucide-react";
@@ -46,6 +47,16 @@ const REFRESH_USED_KEY = "yourclip_refresh_used";
 const REFRESH_USED_TIMESTAMP_KEY = "yourclip_refresh_timestamp";
 const USER_ID_KEY = "yourclip_current_user";
 
+// Export function to clear user data (can be called from logout)
+export const clearUserRecommendationData = () => {
+  localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
+  localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
+  localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
+  localStorage.removeItem(REFRESH_USED_KEY);
+  localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
+  localStorage.removeItem(USER_ID_KEY);
+};
+
 export default function Dashboard() {
   // State management
   const [url, setUrl] = useState("");
@@ -58,7 +69,6 @@ export default function Dashboard() {
   const [trendingVideos, setTrendingVideos] = useState<TrendingVideo[]>([]);
   const [historyVideos, setHistoryVideos] = useState<TrendingVideo[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  // const [historyStreamIndex, setHistoryStreamIndex] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasPreferences, setHasPreferences] = useState<boolean | null>(null);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
@@ -182,47 +192,7 @@ export default function Dashboard() {
     localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
   };
 
-  // Fetch history videos with simulated streaming
-  const fetchHistoryVideos = useCallback(async () => {
-    try {
-      setIsLoadingHistory(true);
-      setHistoryVideos([]);
-      // setHistoryStreamIndex(0);
-
-      const response = await axios.get("/api/history", {
-        withCredentials: true,
-      });
-
-      if (response.data?.data?.[0]?.videos) {
-        const videos = response.data.data[1].videos;
-        const uniqueVideos = new Map();
-
-        // Ensure unique videos by using a Map
-        for (let i = 0; i < videos.length; i++) {
-          const video = convertToTrendingVideo(videos[i]);
-          // Use video URL or ID as the key to ensure uniqueness
-          const key = video.url || video.id || `video-${i}`;
-          if (!uniqueVideos.has(key)) {
-            uniqueVideos.set(key, video);
-          }
-        }
-
-        // Convert Map back to array and stream them
-        const uniqueVideoArray = Array.from(uniqueVideos.values());
-        for (let i = 0; i < uniqueVideoArray.length; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          setHistoryVideos((prev) => [...prev, uniqueVideoArray[i]]);
-          // setHistoryStreamIndex(i + 1);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching history videos:", error);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, []); // Remove dependencies to prevent re-creation
-
-  // Process streaming response
+  // Process streaming response - memoized with minimal dependencies
   const processStreamingResponse = useCallback(
     async (
       response: Response,
@@ -271,9 +241,7 @@ export default function Dashboard() {
                 const newVideo = convertToTrendingVideo(parsed.data);
                 tempStreamedVideos.push(newVideo);
                 setStreamedVideos((prev) => [...prev, newVideo]);
-                if (!showVideos) {
-                  setShowVideos(true);
-                }
+                setShowVideos(true);
               } else if (parsed.type === "complete") {
                 setIsStreamingVideos(false);
                 setStreamingMessage("");
@@ -288,10 +256,48 @@ export default function Dashboard() {
         }
       }
     },
-    [showVideos]
+    [] // No dependencies needed
   );
 
-  // Load recommendations
+  // Fetch history videos - memoized with no dependencies
+  const fetchHistoryVideos = useCallback(async () => {
+    try {
+      setIsLoadingHistory(true);
+      setHistoryVideos([]);
+
+      const response = await axios.get("/api/history", {
+        withCredentials: true,
+      });
+
+      if (response.data?.data?.[0]?.videos) {
+        const videos = response.data.data[1].videos;
+        const uniqueVideos = new Map();
+
+        // Ensure unique videos by using a Map
+        for (let i = 0; i < videos.length; i++) {
+          const video = convertToTrendingVideo(videos[i]);
+          // Use video URL or ID as the key to ensure uniqueness
+          const key = video.url || video.id || `video-${i}`;
+          if (!uniqueVideos.has(key)) {
+            uniqueVideos.set(key, video);
+          }
+        }
+
+        // Convert Map back to array and stream them
+        const uniqueVideoArray = Array.from(uniqueVideos.values());
+        for (let i = 0; i < uniqueVideoArray.length; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          setHistoryVideos((prev) => [...prev, uniqueVideoArray[i]]);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching history videos:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
+  // Load recommendations - memoized with stable dependencies
   const loadRecommendations = useCallback(
     async (preferences: UserPreferences, isRefresh: boolean = false) => {
       if (isRefresh) {
@@ -335,9 +341,14 @@ export default function Dashboard() {
         setIsStreamingVideos(false);
         setStreamingMessage("");
 
-        if (isRefresh && trendingVideos.length > 0) {
-          const shuffled = [...trendingVideos].sort(() => Math.random() - 0.5);
-          setTrendingVideos(shuffled);
+        if (isRefresh) {
+          // If refresh fails, try to show existing videos shuffled
+          setTrendingVideos((prev) => {
+            if (prev.length > 0) {
+              return [...prev].sort(() => Math.random() - 0.5);
+            }
+            return prev;
+          });
         }
       } finally {
         if (isRefresh) {
@@ -345,7 +356,7 @@ export default function Dashboard() {
         }
       }
     },
-    [processStreamingResponse, fetchHistoryVideos, trendingVideos]
+    [processStreamingResponse, fetchHistoryVideos]
   );
 
   // Check user preferences and load trending videos
@@ -416,7 +427,7 @@ export default function Dashboard() {
               setStreamedVideos(videos); // Also set streamed videos to show immediately
             } else {
               // Load recommendations for the first time
-              loadRecommendations({
+              await loadRecommendations({
                 contentPreference,
                 languagePreference,
               });
@@ -446,7 +457,7 @@ export default function Dashboard() {
     return () => {
       mounted = false;
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [fetchHistoryVideos, loadRecommendations]);
 
   // Add effect to clear recommendations when preferences change
   useEffect(() => {
