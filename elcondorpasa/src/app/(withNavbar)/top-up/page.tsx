@@ -140,35 +140,6 @@ const FadeInView: React.FC<{
   </motion.div>
 );
 
-const AnimatedBackground = () => (
-  <>
-    <motion.div
-      animate={{
-        scale: [1, 1.2, 1],
-        rotate: [0, 180, 360],
-      }}
-      transition={{
-        duration: 20,
-        repeat: Infinity,
-        ease: "linear",
-      }}
-      className="absolute top-20 left-10 w-64 h-64 bg-[#D68CB8]/10 rounded-full blur-3xl"
-    />
-    <motion.div
-      animate={{
-        scale: [1.2, 1, 1.2],
-        rotate: [360, 180, 0],
-      }}
-      transition={{
-        duration: 25,
-        repeat: Infinity,
-        ease: "linear",
-      }}
-      className="absolute bottom-20 right-10 w-96 h-96 bg-[#D68CB8]/5 rounded-full blur-3xl"
-    />
-  </>
-);
-
 const SuccessModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;

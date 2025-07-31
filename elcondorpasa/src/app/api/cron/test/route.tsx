@@ -71,21 +71,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-export async function manualTrigger() {
-  try {
-    const cronService = CronService.getInstance();
-    console.log("🧪 Manually triggering daily reminder...");
-    await cronService.testDailyReminder();
-    return NextResponse.json({
-      success: true,
-      message: "Daily reminder triggered manually",
-    });
-  } catch (error) {
-    console.error("❌ Failed to trigger daily reminder manually:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to trigger daily reminder" },
-      { status: 500 }
-    );
-  }
-}

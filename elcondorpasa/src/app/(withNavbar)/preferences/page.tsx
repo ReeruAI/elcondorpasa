@@ -164,16 +164,6 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
   },
 ];
 
-// Animation variants
-const fadeInVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (delay: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, delay },
-  }),
-};
-
 const cardVariants = {
   hidden: { opacity: 0, scale: 0.8 },
   visible: (delay: number = 0) => ({

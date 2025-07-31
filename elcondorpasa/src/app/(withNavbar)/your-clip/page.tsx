@@ -11,7 +11,6 @@ import LoadingState from "../../../components/yourclip/LoadingState";
 import EmptyState from "../../../components/yourclip/EmptyState";
 import ParticleBackground from "@/components/yourclip/ParticleBackground";
 import CursorGlow from "@/components/CursorGlow";
-import { usePathname } from "next/navigation";
 
 export default function YourClipsPage() {
   const { shorts, isLoading } = useUserShorts();

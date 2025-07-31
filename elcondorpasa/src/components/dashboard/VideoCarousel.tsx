@@ -1,4 +1,4 @@
-import { RefObject, useState, useEffect, useRef } from "react";
+import { RefObject, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,

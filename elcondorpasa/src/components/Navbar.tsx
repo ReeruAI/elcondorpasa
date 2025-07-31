@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, Sparkles, X, User, LogOut, Coins } from "lucide-react";
+import { Menu, X, User, LogOut, Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { clearUserRecommendationData } from "@/app/(withNavbar)/dashboard/page";
+// import { clearUserRecommendationData } from "@/app/(withNavbar)/dashboard/page";
+import { clearUserRecommendationData } from "@/utils/recomendation"; // Adjust import path as needed
 
 // Token context for global state management
 import { createContext, useContext } from "react";
@@ -107,7 +108,7 @@ const ScaleButton: React.FC<ScaleButtonProps> = ({
 export default function Navbar() {
   const [isVisible, setIsVisible] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [scrollY, setScrollY] = useState(0);
+  // const [scrollY, setScrollY] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -116,11 +117,7 @@ export default function Navbar() {
   const lastScrollRef = useRef(0);
 
   // Use token context
-  const {
-    tokens: userTokens,
-    isLoading: isLoadingTokens,
-    refreshTokens,
-  } = useTokens();
+  const { tokens: userTokens, isLoading: isLoadingTokens } = useTokens();
 
   const navLinks = useMemo(
     () => [
@@ -170,7 +167,7 @@ export default function Navbar() {
           }
 
           lastScrollRef.current = currentScrollY;
-          setScrollY(currentScrollY);
+          // setScrollY(currentScrollY);
           ticking = false;
         });
         ticking = true;

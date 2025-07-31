@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { TrendingUp, Loader2, History } from "lucide-react";
@@ -47,16 +46,6 @@ const REFRESH_USED_KEY = "yourclip_refresh_used";
 const REFRESH_USED_TIMESTAMP_KEY = "yourclip_refresh_timestamp";
 const USER_ID_KEY = "yourclip_current_user";
 
-// Export function to clear user data (can be called from logout)
-export const clearUserRecommendationData = () => {
-  localStorage.removeItem(RECOMMENDATIONS_LOADED_KEY);
-  localStorage.removeItem(RECOMMENDATIONS_DATA_KEY);
-  localStorage.removeItem(RECOMMENDATIONS_TIMESTAMP_KEY);
-  localStorage.removeItem(REFRESH_USED_KEY);
-  localStorage.removeItem(REFRESH_USED_TIMESTAMP_KEY);
-  localStorage.removeItem(USER_ID_KEY);
-};
-
 export default function Dashboard() {
   // State management
   const [url, setUrl] = useState("");
@@ -69,7 +58,7 @@ export default function Dashboard() {
   const [trendingVideos, setTrendingVideos] = useState<TrendingVideo[]>([]);
   const [historyVideos, setHistoryVideos] = useState<TrendingVideo[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [historyStreamIndex, setHistoryStreamIndex] = useState(0);
+  // const [historyStreamIndex, setHistoryStreamIndex] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasPreferences, setHasPreferences] = useState<boolean | null>(null);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
@@ -95,9 +84,7 @@ export default function Dashboard() {
   // Video result state
   const [videoResult, setVideoResult] = useState<VideoResult | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
-  const [urlError, setUrlError] = useState<string | null>(null);
 
-  const router = useRouter();
   const trendingSliderRef = useRef<HTMLDivElement>(
     null
   ) as React.RefObject<HTMLDivElement>;
@@ -200,7 +187,7 @@ export default function Dashboard() {
     try {
       setIsLoadingHistory(true);
       setHistoryVideos([]);
-      setHistoryStreamIndex(0);
+      // setHistoryStreamIndex(0);
 
       const response = await axios.get("/api/history", {
         withCredentials: true,
@@ -225,7 +212,7 @@ export default function Dashboard() {
         for (let i = 0; i < uniqueVideoArray.length; i++) {
           await new Promise((resolve) => setTimeout(resolve, 500));
           setHistoryVideos((prev) => [...prev, uniqueVideoArray[i]]);
-          setHistoryStreamIndex(i + 1);
+          // setHistoryStreamIndex(i + 1);
         }
       }
     } catch (error) {
@@ -490,7 +477,6 @@ export default function Dashboard() {
     if (!url.trim() || processingState.isProcessing) return;
 
     setIsLoading(true);
-    setUrlError(null); // Clear any previous errors
     setShowLoadingModal(true);
 
     const newProcessingState: ProcessingState = {
@@ -511,23 +497,8 @@ export default function Dashboard() {
         body: JSON.stringify({ video_url: url }),
       });
 
-      // Check if response is not ok
       if (!response.ok) {
-        const errorData = await response.json();
-        setUrlError(errorData.error || "Failed to start processing");
-        setShowLoadingModal(false);
-
-        // Clear processing state on error
-        clearProcessingState();
-        setProcessingState({
-          isProcessing: false,
-          progress: 0,
-          message: "",
-          status: "idle",
-        });
-
-        setIsLoading(false);
-        return;
+        throw new Error("Failed to start processing");
       }
 
       await processKlapStream(
@@ -578,7 +549,6 @@ export default function Dashboard() {
             message: error,
             status: "error",
           });
-          setUrlError(error);
           console.error("Klap processing error:", error);
         }
       );
@@ -591,7 +561,6 @@ export default function Dashboard() {
         message: "Failed to process video",
         status: "error",
       });
-      setUrlError("Failed to process video. Please try again.");
       setShowLoadingModal(false);
     } finally {
       setIsLoading(false);
@@ -602,7 +571,6 @@ export default function Dashboard() {
     if (processingState.isProcessing) return;
 
     setUrl(videoUrl);
-    setUrlError(null); // Clear any previous errors
     setShowLoadingModal(true);
 
     const newProcessingState: ProcessingState = {
@@ -624,19 +592,7 @@ export default function Dashboard() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        setUrlError(errorData.error || "Failed to start processing");
-        setShowLoadingModal(false);
-
-        clearProcessingState();
-        setProcessingState({
-          isProcessing: false,
-          progress: 0,
-          message: "",
-          status: "idle",
-        });
-
-        return;
+        throw new Error("Failed to start processing");
       }
 
       await processKlapStream(
@@ -686,7 +642,6 @@ export default function Dashboard() {
             message: error,
             status: "error",
           });
-          setUrlError(error);
           console.error("Klap processing error:", error);
         }
       );
@@ -699,7 +654,6 @@ export default function Dashboard() {
         message: "Failed to process video",
         status: "error",
       });
-      setUrlError("Failed to process video. Please try again.");
       setShowLoadingModal(false);
     }
   };
@@ -741,15 +695,6 @@ export default function Dashboard() {
     setSelectedVideo(video);
     setShowOptionsModal(true);
   };
-
-  const pathname = usePathname();
-  useEffect(() => {
-    const currentPath = pathname.split("/")[1];
-    const title = `ReeruAI - ${
-      currentPath.charAt(0).toUpperCase() + currentPath.slice(1)
-    }`;
-    document.title = title;
-  }, [pathname]);
 
   const displayVideos =
     showVideos || hasLoadedRecommendations
@@ -796,9 +741,9 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center"
               >
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-pink-200 to-pink-600 bg-clip-text text-transparent mb-4">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4">
                   Dash
-                  <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-300 to-pink-400">
                     board
                   </span>
                 </h1>
@@ -817,8 +762,6 @@ export default function Dashboard() {
             onSubmit={handleSubmitUrl}
             onCheckProgress={handleCheckProgress}
             isProcessing={processingState.isProcessing}
-            error={urlError}
-            setError={setUrlError}
           />
 
           {/* Trending Videos Section */}

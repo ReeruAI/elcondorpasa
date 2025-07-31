@@ -5,7 +5,6 @@ import {
   TrendingUp,
   Copy,
   CheckCircle,
-  Clock,
   Youtube,
   Loader2,
   Sparkles,
@@ -51,7 +50,6 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
   const {
     isConnected: isYouTubeConnected,
     isUploading,
-    uploadStatus,
     handleLogin: handleYouTubeLogin,
     handleUpload: handleYouTubeUpload,
   } = useYouTubeIntegration();
@@ -85,10 +83,10 @@ export const VideoResultModal: React.FC<VideoResultModalProps> = ({
     }
   }, [videoData, handleYouTubeUpload]);
 
-  const handleViewRecentClips = useCallback(() => {
-    onClose();
-    router.push("/your-clip");
-  }, [onClose, router]);
+  // const handleViewRecentClips = useCallback(() => {
+  //   onClose();
+  //   router.push("/your-clip");
+  // }, [onClose, router]);
 
   if (!videoData) return null;
 

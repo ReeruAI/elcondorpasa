@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import {
   MessageCircle,
   Copy,
@@ -26,6 +26,14 @@ interface OTPStatus {
   hasActiveOTP: boolean;
   otpCode?: string;
   otpExpiresAt?: string;
+}
+
+interface ApiResponse {
+  success: boolean;
+  data: OTPStatus & {
+    otpCode?: string;
+    expiresAt?: string;
+  };
 }
 
 // Animation variants
@@ -55,7 +63,7 @@ export default function OTPTestPage() {
     setIsGenerating(true);
 
     try {
-      const response = await axios.post(
+      const response = await axios.post<ApiResponse>(
         "/api/telegram/generate-otp",
         {},
         {
@@ -73,8 +81,9 @@ export default function OTPTestPage() {
           otpExpiresAt: response.data.data.expiresAt,
         });
       }
-    } catch (error: any) {
-      console.error("Generate OTP error:", error);
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error("Generate OTP error:", axiosError);
     } finally {
       setIsGenerating(false);
     }
@@ -85,13 +94,16 @@ export default function OTPTestPage() {
     setIsLoading(true);
 
     try {
-      const response = await axios.get("/api/telegram/generate-otp");
+      const response = await axios.get<ApiResponse>(
+        "/api/telegram/generate-otp"
+      );
 
       if (response.data.success) {
         setOtpStatus(response.data.data);
       }
-    } catch (error: any) {
-      console.error("Get status error:", error);
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error("Get status error:", axiosError);
     } finally {
       setIsLoading(false);
     }
@@ -100,14 +112,17 @@ export default function OTPTestPage() {
   // Test Cancel OTP
   const testCancelOTP = async () => {
     try {
-      const response = await axios.delete("/api/telegram/generate-otp");
+      const response = await axios.delete<ApiResponse>(
+        "/api/telegram/generate-otp"
+      );
 
       if (response.data.success) {
         // Refresh status after cancellation
         await testGetStatus();
       }
-    } catch (error: any) {
-      console.error("Cancel OTP error:", error);
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error("Cancel OTP error:", axiosError);
     }
   };
 
@@ -118,8 +133,8 @@ export default function OTPTestPage() {
         await navigator.clipboard.writeText(otpStatus.otpCode);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-      } catch (error) {
-        console.error("Failed to copy OTP");
+      } catch (copyError) {
+        console.error("Failed to copy OTP", copyError);
       }
     }
   };
@@ -347,7 +362,7 @@ export default function OTPTestPage() {
                     </p>
                     <div className="flex items-center gap-2 mt-1 text-sm text-gray-400">
                       <Key className="w-3 h-3" />
-                      <span>Click "Generate OTP" button below</span>
+                      <span>Click &ldquo;Generate OTP&rdquo; button below</span>
                     </div>
                   </div>
                 </motion.div>

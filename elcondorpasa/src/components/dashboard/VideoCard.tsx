@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Eye, Clock } from "lucide-react";
 import { VideoCardProps } from "@/types";
+import Image from "next/image";
 
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
@@ -24,10 +25,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         className="flex-shrink-0 w-80 cursor-pointer group"
       >
         <div className="relative aspect-video rounded-xl overflow-hidden mb-4">
-          <img
+          <Image
             src={video.thumbnail}
             alt={video.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            width={320}
+            height={180}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className="absolute bottom-2 left-2 bg-black/80 px-2 py-1 rounded text-xs">
