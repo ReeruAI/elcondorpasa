@@ -160,49 +160,78 @@ if (shouldInitialize) {
 
                 if (data.status === "completed" && data.short && bot) {
                   const short = data.short;
-                  const completionMessage =
-                    `✅ *Video Ready!*\n\n` +
-                    `🎬 *Title:* ${short.title}\n` +
-                    `🎯 *Virality Score:* ${short.virality_score}/100\n` +
-                    `💡 *Analysis:*\n_${short.description}_\n\n` +
-                    `📝 *Caption suggestion:*\n${
-                      short.captions?.tiktok ||
-                      short.captions ||
-                      "No caption generated"
-                    }\n\n` +
-                    `🪙 *Tokens remaining:* ${data.tokens_remaining || 0}\n\n` +
-                    `🌐 *View your short:* [Open Dashboard](${
-                      process.env.API_BASE_URL || "http://localhost:3000"
-                    }/your-clip)\n` +
-                    `🔗 *Original:* [View on YouTube](${videoUrl})`;
-
-                  if (messageId) {
-                    await bot.editMessageText(completionMessage, {
-                      chat_id: chatId,
-                      message_id: messageId,
-                      parse_mode: "Markdown",
-                      disable_web_page_preview: true,
-                    });
-                  }
-
-                  await bot.sendMessage(
-                    chatId,
-                    `🎉 *Success!*\n\n` +
-                      `Your short "${short.title}" is ready!\n\n` +
-                      `📱 *View & Download:* [${
+                  // Only send success if export_status is not failed/terminated
+                  if (
+                    short.export_status !== "failed" &&
+                    short.export_status !== "error" &&
+                    short.export_status !== "terminated" &&
+                    short.download_url
+                  ) {
+                    const completionMessage =
+                      `✅ *Video Ready!*\n\n` +
+                      `🎬 *Title:* ${short.title}\n` +
+                      `🎯 *Virality Score:* ${short.virality_score}/100\n` +
+                      `💡 *Analysis:*\n_${short.description}_\n\n` +
+                      `📝 *Caption suggestion:*\n${
+                        short.captions?.tiktok ||
+                        short.captions ||
+                        "No caption generated"
+                      }\n\n` +
+                      `🪙 *Tokens remaining:* ${
+                        data.tokens_remaining || 0
+                      }\n\n` +
+                      `🌐 *View your short:* [Open Dashboard](${
                         process.env.API_BASE_URL || "http://localhost:3000"
-                      }/your-clip](${
-                        process.env.API_BASE_URL || "http://localhost:3000"
-                      }/your-clip)\n\n` +
-                      `💾 *Direct download:* ${short.download_url}`,
-                    {
-                      parse_mode: "Markdown",
-                      disable_web_page_preview: false,
+                      }/your-clip)\n` +
+                      `🔗 *Original:* [View on YouTube](${videoUrl})`;
+
+                    if (messageId) {
+                      await bot.editMessageText(completionMessage, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        parse_mode: "Markdown",
+                        disable_web_page_preview: true,
+                      });
                     }
-                  );
+
+                    await bot.sendMessage(
+                      chatId,
+                      `🎉 *Success!*\n\n` +
+                        `Your short "${short.title}" is ready!\n\n` +
+                        `📱 *View & Download:* [${
+                          process.env.API_BASE_URL || "http://localhost:3000"
+                        }/your-clip](${
+                          process.env.API_BASE_URL || "http://localhost:3000"
+                        }/your-clip)\n\n` +
+                        `💾 *Direct download:* ${short.download_url}`,
+                      {
+                        parse_mode: "Markdown",
+                        disable_web_page_preview: false,
+                      }
+                    );
+                  } else {
+                    // Suppress error message for terminated/failed export
+                    console.log(
+                      "🚫 Suppressing error message for terminated/failed export."
+                    );
+                  }
                 }
 
                 if (data.status === "error" && bot) {
+                  // Suppress error message if error_code or message contains 'terminated'
+                  if (
+                    (data.error_code &&
+                      data.error_code.toLowerCase().includes("terminated")) ||
+                    (data.message &&
+                      typeof data.message === "string" &&
+                      data.message.toLowerCase().includes("terminated"))
+                  ) {
+                    console.log(
+                      "🚫 Suppressing error message for terminated error."
+                    );
+                    break;
+                  }
+
                   let errorMessage = `❌ *Processing Failed*\n\n`;
 
                   if (data.error_code === "video_too_long") {
