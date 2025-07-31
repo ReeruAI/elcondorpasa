@@ -140,7 +140,6 @@ export async function POST(request: NextRequest) {
         console.log("📡 Stream started for user:", finalUserId);
         const encoder = new TextEncoder();
         let isProcessingFlagCleared = false;
-        let streamClosed = false;
 
         // Helper function to clear processing flag
         const clearProcessingFlag = async () => {
@@ -153,13 +152,6 @@ export async function POST(request: NextRequest) {
 
         // Helper function to send SSE data with proper await
         const sendUpdate = async (data: SSEUpdateData) => {
-          if (streamClosed) {
-            console.warn(
-              "⚠️ Attempted to send update after stream closed",
-              data
-            );
-            return false;
-          }
           try {
             const timestamp = new Date().toISOString();
             const message = `data: ${JSON.stringify({
@@ -506,7 +498,6 @@ export async function POST(request: NextRequest) {
                 });
                 await clearProcessingFlag();
                 controller.close();
-                streamClosed = true;
                 return;
               }
 
@@ -623,7 +614,6 @@ export async function POST(request: NextRequest) {
             });
             await clearProcessingFlag();
             controller.close();
-            streamClosed = true;
             return;
           }
 
@@ -670,71 +660,27 @@ export async function POST(request: NextRequest) {
             const exportUrl = `https://api.klap.app/v2/projects/${bestShort.folder_id}/${bestShort.id}/exports`;
             console.log("📤 Export URL:", exportUrl);
 
-            // Add retry logic for export creation
-            let exportRes;
-            let exportData: ExportResponse | null = null;
-            let exportId: string | null = null;
-            const maxExportCreateRetries = 5;
-            let exportCreateSuccess = false;
-            for (
-              let exportCreateAttempt = 0;
-              exportCreateAttempt < maxExportCreateRetries;
-              exportCreateAttempt++
-            ) {
-              exportRes = await fetch(exportUrl, {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${KLAP_API_KEY}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({}),
-              });
-              console.log(
-                `📤 Export response status (attempt ${
-                  exportCreateAttempt + 1
-                }):`,
-                exportRes.status
-              );
-              if (exportRes.ok) {
-                exportData = await exportRes.json();
-                if (exportData && exportData.id) {
-                  exportId = exportData.id;
-                  exportCreateSuccess = true;
-                  console.log("✅ Export created with ID:", exportId);
-                  break;
-                } else {
-                  console.error("❌ Export response missing id field.");
-                }
-              } else {
-                const errorText = await exportRes.text();
-                console.error(
-                  `❌ Export creation failed (attempt ${
-                    exportCreateAttempt + 1
-                  }):`,
-                  errorText
-                );
-                if (exportCreateAttempt < maxExportCreateRetries - 1) {
-                  await sendUpdate({
-                    status: "waiting_export_retry",
-                    message: `Export creation failed, retrying... (${
-                      exportCreateAttempt + 2
-                    }/${maxExportCreateRetries})`,
-                    progress: 91,
-                  });
-                  await delay(10000);
-                }
-              }
+            const exportRes = await fetch(exportUrl, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${KLAP_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({}),
+            });
+
+            console.log("📤 Export response status:", exportRes.status);
+
+            if (!exportRes.ok) {
+              const errorText = await exportRes.text();
+              console.error("❌ Export creation failed:", errorText);
+              throw new Error(`Export creation failed: ${errorText}`);
             }
-            if (!exportCreateSuccess || !exportData || !exportId) {
-              await sendUpdate({
-                status: "error",
-                message: "Export creation failed after multiple retries.",
-                progress: 91,
-              });
-              await clearProcessingFlag();
-              // Do not close stream here, let the final block handle it
-              return;
-            }
+
+            const exportData: ExportResponse = await exportRes.json();
+            const exportId = exportData.id;
+            console.log("✅ Export created with ID:", exportId);
+
             await sendUpdate({
               status: "waiting_export",
               message: `Waiting for export to complete...`,
@@ -793,9 +739,7 @@ export async function POST(request: NextRequest) {
                   exportStatus === "error"
                 ) {
                   console.error("❌ Export failed");
-                  await clearProcessingFlag();
-                  // Do not close stream here, let the final block handle it
-                  return;
+                  throw new Error("Export failed");
                 }
               }
 
@@ -878,27 +822,30 @@ export async function POST(request: NextRequest) {
             });
           } catch (error) {
             console.error("❌ Export error:", error);
-            await clearProcessingFlag();
-            // Do not close stream here, let the final block handle it
-            return;
+            await sendUpdate({
+              status: "error",
+              message: "Export failed",
+              error: error instanceof Error ? error.message : String(error),
+              short_info: {
+                id: bestShort.id,
+                title: bestShort.name,
+                virality_score: bestShort.virality_score,
+              },
+            });
           }
 
           console.log("🏁 Clearing processing flag and closing stream");
           await clearProcessingFlag();
           controller.close();
-          streamClosed = true;
         } catch (error) {
           console.error("❌ Stream error:", error);
-          if (!streamClosed) {
-            await sendUpdate({
-              status: "error",
-              message: "Internal server error occurred",
-              error: error instanceof Error ? error.message : String(error),
-            });
-            await clearProcessingFlag();
-            controller.close();
-            streamClosed = true;
-          }
+          await sendUpdate({
+            status: "error",
+            message: "Internal server error occurred",
+            error: error instanceof Error ? error.message : String(error),
+          });
+          await clearProcessingFlag();
+          controller.close();
         }
       },
     });
