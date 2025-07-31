@@ -1,74 +1,27 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
-import { motion } from "framer-motion";
 
 export default function Loading() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [shouldShow, setShouldShow] = useState(true);
   const [progress, setProgress] = useState(0);
-  const [logoAnimated, setLogoAnimated] = useState(false);
-  const [textAnimated, setTextAnimated] = useState(false);
 
   useEffect(() => {
-    // Check if this is the first visit
-    const hasVisited = sessionStorage.getItem("hasVisited");
-
-    if (hasVisited === "true") {
-      // Optional: Skip loading screen for returning visitors
-      // setShouldShow(false);
-      // setIsLoading(false);
-      // return;
-    }
-
-    // Set the flag for future visits
-    sessionStorage.setItem("hasVisited", "true");
-
-    // Start logo animation
-    setTimeout(() => {
-      setLogoAnimated(true);
-      // Start text animation after logo
-      setTimeout(() => {
-        setTextAnimated(true);
-      }, 400);
-    }, 100);
-
-    // Animate progress bar
-    const duration = 1000; // 2 seconds total
-    const interval = 20; // Update every 20ms
-    const increment = 100 / (duration / interval);
-
-    const progressTimer = setInterval(() => {
+    const timer = setInterval(() => {
       setProgress((prev) => {
-        const next = prev + increment;
-        if (next >= 100) {
-          clearInterval(progressTimer);
-          // Start hiding the loading screen
-          setTimeout(() => {
-            setIsLoading(false);
-            setTimeout(() => {
-              setShouldShow(false);
-            }, 500);
-          }, 200);
+        if (prev >= 100) {
+          clearInterval(timer);
           return 100;
         }
-        return next;
+        return prev + 2;
       });
-    }, interval);
+    }, 30);
 
-    return () => clearInterval(progressTimer);
+    return () => clearInterval(timer);
   }, []);
-
-  if (!shouldShow) return null;
 
   return (
     <div
-      className={`fixed inset-0 z-[999] flex items-center justify-center
-         transition-all duration-500 ${
-           isLoading
-             ? "opacity-100 translate-y-0"
-             : "opacity-0 -translate-y-full pointer-events-none"
-         }`}
+      className="fixed inset-0 z-[999] flex items-center justify-center"
       style={{
         background: "linear-gradient(to bottom, #1D1D1D, #000000)",
       }}
@@ -76,22 +29,14 @@ export default function Loading() {
       {/* Animated background particles */}
       <div className="absolute inset-0 overflow-hidden">
         {[...Array(20)].map((_, i) => (
-          <motion.div
+          <div
             key={i}
-            className="absolute w-1 h-1 bg-pink-400/20 rounded-full"
-            initial={{
-              x: Math.random() * window.innerWidth,
-              y: Math.random() * window.innerHeight,
-            }}
-            animate={{
-              y: [null, -100],
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: Math.random() * 5 + 5,
-              repeat: Infinity,
-              delay: Math.random() * 5,
-              ease: "linear",
+            className="absolute w-1 h-1 bg-pink-400/20 rounded-full animate-float"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 5}s`,
+              animationDuration: `${5 + Math.random() * 5}s`,
             }}
           />
         ))}
@@ -103,13 +48,7 @@ export default function Loading() {
           {/* Container that holds both logo and text */}
           <div className="flex items-center justify-center h-full">
             {/* Logo with glass background */}
-            <motion.div
-              className={`transition-all duration-700 ease-out relative ${
-                logoAnimated
-                  ? "translate-y-0 opacity-100"
-                  : "-translate-y-20 opacity-0"
-              }`}
-            >
+            <div className="relative">
               <div
                 className="absolute inset-0 w-20 h-20 rounded-full -z-10"
                 style={{
@@ -135,17 +74,10 @@ export default function Loading() {
                   priority
                 />
               </div>
-            </motion.div>
+            </div>
 
-            {/* Text with gradient animation */}
-            <div
-              className={`transition-all duration-700 ease-out ml-4 ${
-                textAnimated ? "opacity-100" : "opacity-0"
-              }`}
-              style={{
-                transform: textAnimated ? "translateX(0)" : "translateX(80px)",
-              }}
-            >
+            {/* Text with gradient */}
+            <div className="ml-4">
               <h2 className="text-3xl font-bold">
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600">
                   Reeru
@@ -220,14 +152,9 @@ export default function Loading() {
         </div>
 
         {/* Loading tips */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: progress > 50 ? 0.7 : 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-xs text-gray-400 mt-8"
-        >
+        <p className="text-xs text-gray-400 mt-8 opacity-70">
           Preparing your video editing workspace...
-        </motion.p>
+        </p>
       </div>
 
       <style jsx>{`
@@ -238,6 +165,28 @@ export default function Loading() {
           100% {
             transform: translateX(200%);
           }
+        }
+
+        @keyframes float {
+          0%,
+          100% {
+            transform: translateY(0) translateX(0);
+            opacity: 0;
+          }
+          10% {
+            opacity: 0.2;
+          }
+          90% {
+            opacity: 0.2;
+          }
+          100% {
+            transform: translateY(-100px) translateX(20px);
+            opacity: 0;
+          }
+        }
+
+        .animate-float {
+          animation: float linear infinite;
         }
       `}</style>
     </div>

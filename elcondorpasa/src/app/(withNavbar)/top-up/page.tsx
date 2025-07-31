@@ -467,9 +467,9 @@ export default function TopUpPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="text-center"
                   >
-                    <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4">
+                    <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-pink-200 to-pink-600 bg-clip-text text-transparent pb-4">
                       Choose Your{" "}
-                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-300 to-pink-400">
+                      <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
                         Package
                       </span>
                     </h1>
@@ -515,30 +515,6 @@ export default function TopUpPage() {
                 />
               ))}
             </div>
-
-            {/* Development info */}
-            {process.env.NODE_ENV === "development" && (
-              <FadeInView delay={0.7} className="mt-8">
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.5 }}
-                  className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl backdrop-blur-sm max-w-2xl mx-auto"
-                >
-                  <h3 className="text-sm font-medium text-blue-400 mb-2">
-                    Development Mode - Midtrans Snap
-                  </h3>
-                  <p className="text-xs text-blue-300/70">
-                    Using Sandbox environment. Requires
-                    NEXT_PUBLIC_MIDTRANS_CLIENT_KEY in .env.local
-                  </p>
-                  {!process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY && (
-                    <p className="text-xs text-red-400 mt-1">
-                      ⚠️ Midtrans Client Key not found
-                    </p>
-                  )}
-                </motion.div>
-              </FadeInView>
-            )}
           </div>
         </div>
 

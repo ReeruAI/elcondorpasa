@@ -79,7 +79,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
           <div className="p-3 rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-600/20">
             <Link className="w-6 h-6 text-pink-400" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
             Generate from YouTube URL
           </h2>
         </div>

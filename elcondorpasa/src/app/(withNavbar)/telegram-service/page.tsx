@@ -168,8 +168,11 @@ export default function OTPTestPage() {
             >
               <MessageCircle className="w-10 h-10 text-white" />
             </motion.div>
-            <h1 className="text-4xl sm:text-5xl font-bold text-white mb-3">
-              OTP Testing Page
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-pink-200 to-pink-600 bg-clip-text text-transparent pb-4">
+              OTP Testing{" "}
+              <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                Page
+              </span>
             </h1>
             <p className="text-base sm:text-lg text-gray-300">
               Test OTP functionality for Telegram integration

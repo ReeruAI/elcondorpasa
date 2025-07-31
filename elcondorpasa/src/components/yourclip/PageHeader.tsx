@@ -12,9 +12,9 @@ const PageHeader: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           className="text-center"
         >
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-pink-200 to-pink-600 bg-clip-text text-transparent mb-4">
             Your{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-300 to-pink-400">
+            <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
               Clips
             </span>
           </h1>

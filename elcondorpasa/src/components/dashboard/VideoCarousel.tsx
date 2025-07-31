@@ -158,8 +158,10 @@ export const VideoCarousel: React.FC<VideoCarouselProps> = ({
       {/* Header with title and controls in one line */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Icon className="w-6 h-6 text-[#D68CB8]" />
-          <h2 className="text-xl sm:text-2xl font-semibold">{title}</h2>
+          <Icon className="w-6 h-6 text-pink-400" />
+          <h2 className="text-xl sm:text-2xl font-semibold bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+            {title}
+          </h2>
         </div>
 
         <div className="flex items-center gap-3">
