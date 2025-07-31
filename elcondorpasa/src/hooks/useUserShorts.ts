@@ -1,7 +1,6 @@
 // hooks/useUserShorts.ts
 import { useState, useEffect, useCallback } from "react";
-import axios from "axios";
-import { VideoShort, UserShortsResponse } from "../types";
+import { VideoShort } from "../types";
 
 interface UseUserShortsReturn {
   shorts: VideoShort[];
@@ -19,18 +18,6 @@ export const useUserShorts = (): UseUserShortsReturn => {
     try {
       setIsLoading(true);
       setError(null);
-
-      const response = await axios.get<UserShortsResponse>("/api/user-shorts", {
-        withCredentials: true,
-      });
-
-      if (response.data?.shorts) {
-        const sortedShorts = [...response.data.shorts].sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setShorts(sortedShorts);
-      }
     } catch (error) {
       console.error("Error fetching user shorts:", error);
       setError(error as Error);

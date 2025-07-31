@@ -169,7 +169,6 @@ export const config = {
     "/api/gemini/:path*",
     "/api/midtrans/:path*",
     "/api/klap/:path*",
-    "/api/user-shorts/:path*",
     "/api/youtube/:path*",
     "/api/telegram/verify-otp/:path*",
   ],
