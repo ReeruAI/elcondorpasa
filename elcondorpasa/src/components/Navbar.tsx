@@ -230,10 +230,6 @@ export default function Navbar() {
     [router]
   );
 
-  const handleGetStarted = useCallback(() => {
-    router.push("/register");
-  }, [router]);
-
   const handleLogout = useCallback(async () => {
     try {
       // Clear user-specific recommendation data
@@ -394,11 +390,8 @@ export default function Navbar() {
                 </div>
               </div>
             ) : (
-              <ScaleButton
-                onClick={handleGetStarted}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-full font-semibold text-sm text-white hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300"
-              >
-                Get Started
+              <ScaleButton className="px-6 py-2.5 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-full font-semibold text-sm text-white hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300">
+                Loading ...
               </ScaleButton>
             )}
           </div>
@@ -470,10 +463,7 @@ export default function Navbar() {
                     </button>
                   </div>
                 ) : (
-                  <ScaleButton
-                    onClick={handleGetStarted}
-                    className="w-full px-6 py-2.5 bg-gradient-to-r from-[#D68CB8] to-pink-400 rounded-full font-semibold text-sm text-white hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300"
-                  >
+                  <ScaleButton className="w-full px-6 py-2.5 bg-gradient-to-r from-[#ec4899] to-[#a855f3] rounded-full font-semibold text-sm text-white hover:shadow-lg hover:shadow-pink-500/50 transition-all duration-300">
                     Get Started
                   </ScaleButton>
                 )}
