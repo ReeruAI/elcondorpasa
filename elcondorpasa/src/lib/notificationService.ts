@@ -57,8 +57,12 @@ class NotificationService {
       });
       console.log(`✅ Notification sent to ${user.telegramChatId}`);
       return true;
-    } catch (error: any) {
-      console.log("❌ Notification service error:", error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.log("❌ Notification service error:", error.message);
+      } else {
+        console.log("❌ Notification service error:", error);
+      }
       return false;
     }
   }
@@ -128,8 +132,12 @@ class NotificationService {
 
       console.log(`✅ Notification with button sent to ${user.telegramChatId}`);
       return true;
-    } catch (error: any) {
-      console.log("❌ Notification service error:", error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.log("❌ Notification service error:", error.message);
+      } else {
+        console.log("❌ Notification service error:", error);
+      }
       return false;
     }
   }
@@ -202,8 +210,12 @@ class NotificationService {
         `✅ Notification with multiple buttons sent to ${user.telegramChatId}`
       );
       return true;
-    } catch (error: any) {
-      console.log("❌ Notification service error:", error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.log("❌ Notification service error:", error.message);
+      } else {
+        console.log("❌ Notification service error:", error);
+      }
       return false;
     }
   }
@@ -263,8 +275,12 @@ class NotificationService {
         `📊 Broadcast complete: ${results.success}/${results.total} sent`
       );
       return results;
-    } catch (error: any) {
-      console.log("❌ Broadcast service error:", error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.log("❌ Broadcast service error:", error.message);
+      } else {
+        console.log("❌ Broadcast service error:", error);
+      }
       return false;
     }
   }

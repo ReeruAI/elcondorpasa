@@ -1,10 +1,8 @@
-import { initTelegramBot } from "@/lib/telegramBot";
+import bot from "@/lib/telegramBot";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const bot = initTelegramBot();
-
     if (bot) {
       return NextResponse.json({
         success: true,
@@ -16,11 +14,12 @@ export async function GET() {
         message: "Bot already initialized or failed to start",
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
       {
         success: false,
-        message: error.message,
+        message:
+          error instanceof Error ? error.message : "Failed to initialize bot",
       },
       { status: 500 }
     );

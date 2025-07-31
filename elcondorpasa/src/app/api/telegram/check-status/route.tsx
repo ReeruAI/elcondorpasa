@@ -43,15 +43,23 @@ export async function POST(request: NextRequest) {
         message: "No connected account found",
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Check status error:", error);
-
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to check status",
+        message:
+          error instanceof Error ? error.message : "Failed to check status",
       },
-      { status: error.status || 500 }
+      {
+        status:
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          typeof (error as { status?: unknown }).status === "number"
+            ? (error as { status: number }).status
+            : 500,
+      }
     );
   }
 }
