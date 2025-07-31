@@ -315,7 +315,7 @@ export default function TopUpPage() {
       const isProduction = process.env.NODE_ENV === "production";
 
       script.src = isProduction
-        ? "https://app.midtrans.com/snap/snap.js"
+        ? "https://app.sandbox.midtrans.com/snap/snap.js"
         : "https://app.sandbox.midtrans.com/snap/snap.js";
 
       const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
@@ -338,7 +338,7 @@ export default function TopUpPage() {
 
       script.onload = () => {
         clearTimeout(timeout);
-        console.log("Midtrans Snap loaded successfully");
+        // console.log("Midtrans Snap loaded successfully");
 
         // Double check that window.snap is available
         if (window.snap && typeof window.snap.pay === "function") {
@@ -370,19 +370,19 @@ export default function TopUpPage() {
   }, []);
 
   // Debug logging for production
-  useEffect(() => {
-    if (process.env.NODE_ENV === "production") {
-      console.log("Production environment check:", {
-        hasClientKey: !!process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY,
-        clientKeyLength:
-          process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.length || 0,
-        nodeEnv: process.env.NODE_ENV,
-        snapLoaded: isSnapLoaded,
-        windowSnapExists: !!window.snap,
-        windowSnapPayExists: !!(window.snap && window.snap.pay),
-      });
-    }
-  }, [isSnapLoaded]);
+  // useEffect(() => {
+  //   if (process.env.NODE_ENV === "production") {
+  //     console.log("Production environment check:", {
+  //       hasClientKey: !!process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY,
+  //       clientKeyLength:
+  //         process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.length || 0,
+  //       nodeEnv: process.env.NODE_ENV,
+  //       snapLoaded: isSnapLoaded,
+  //       windowSnapExists: !!window.snap,
+  //       windowSnapPayExists: !!(window.snap && window.snap.pay),
+  //     });
+  //   }
+  // }, [isSnapLoaded]);
 
   const checkTransactionStatus = useCallback(
     async (orderId: string, pkg: Package) => {
@@ -508,7 +508,7 @@ export default function TopUpPage() {
         // Open Midtrans Snap popup
         window.snap.pay(token, {
           onSuccess: async function (result: SnapResult) {
-            console.log("Payment success:", result);
+            // console.log("Payment success:", result);
             // Update tokens in the navbar immediately
             if (pkg.reeruToken) {
               addTokens(pkg.reeruToken);
@@ -518,7 +518,7 @@ export default function TopUpPage() {
             setError("");
           },
           onPending: function (result: SnapResult) {
-            console.log("Payment pending:", result);
+            // console.log("Payment pending:", result);
             setError("Payment is pending. Please complete your payment.");
             setIsLoading(false);
 
@@ -526,14 +526,14 @@ export default function TopUpPage() {
             checkTransactionStatus(order_id, pkg);
           },
           onError: function (result: SnapResult) {
-            console.log("Payment error:", result);
+            // console.log("Payment error:", result);
             setError(
               result.status_message || "Payment failed. Please try again."
             );
             setIsLoading(false);
           },
           onClose: function () {
-            console.log("Payment popup closed");
+            // console.log("Payment popup closed");
             setIsLoading(false);
 
             // Check if payment was made even if popup was closed
