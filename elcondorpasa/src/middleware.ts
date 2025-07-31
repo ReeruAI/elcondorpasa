@@ -16,6 +16,8 @@ const API_ROUTES = [
   "/api/profile",
   "/api/telegram/generate-otp",
   "/api/history",
+  "/api/youtube/upload", // Add this
+  "/api/youtube/status", // Add this
 ];
 const OPTIONAL_AUTH_ROUTES = ["/api/gemini", "/api/midtrans"];
 
@@ -114,7 +116,8 @@ export async function middleware(request: NextRequest) {
     // Add userId to headers for valid tokens
     const requestHeaders = new Headers(request.headers);
     if (verificationResult.userId) {
-      requestHeaders.set("x-userId", verificationResult.userId);
+      requestHeaders.set("x-userid", verificationResult.userId); // Changed to lowercase
+      requestHeaders.set("x-userId", verificationResult.userId); // Keep both for compatibility
     }
 
     return NextResponse.next({ headers: requestHeaders });

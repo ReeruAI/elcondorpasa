@@ -3,6 +3,8 @@ import { google } from "googleapis";
 import { database } from "@/db/config/mongodb";
 import { ObjectId } from "mongodb";
 import { Readable } from "stream";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 
 // Define proper types
 interface YouTubeUser {
@@ -28,6 +30,47 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.YOUTUBE_CLIENT_SECRET,
   process.env.YOUTUBE_REDIRECT_URI
 );
+
+// Helper function to get user ID from various sources
+async function getUserId(request: NextRequest): Promise<string | null> {
+  // Method 1: Check header (both lowercase and camelCase)
+  const headerUserId =
+    request.headers.get("x-userid") || request.headers.get("x-userId");
+  if (headerUserId) return headerUserId;
+
+  // Method 2: Check cookies for auth token
+  const cookieStore = cookies();
+  const authToken =
+    (await cookieStore).get("auth")?.value ||
+    (await cookieStore).get("token")?.value;
+
+  if (authToken) {
+    try {
+      const decoded = jwt.verify(authToken, process.env.JWT_SECRET!) as {
+        userId: string;
+      };
+      return decoded.userId;
+    } catch (error) {
+      console.error("Error decoding auth token:", error);
+    }
+  }
+
+  // Method 3: Check Authorization header
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+        userId: string;
+      };
+      return decoded.userId;
+    } catch (error) {
+      console.error("Error decoding bearer token:", error);
+    }
+  }
+
+  return null;
+}
 
 async function refreshAccessToken(
   userId: string,
@@ -56,10 +99,13 @@ async function refreshAccessToken(
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get("x-userid");
+    // Enhanced user ID retrieval
+    const userId = await getUserId(request);
+
     if (!userId) {
+      console.error("No user ID found in request");
       return NextResponse.json(
-        { success: false, error: "Unauthorized" },
+        { success: false, error: "Unauthorized - No user ID found" },
         { status: 401 }
       );
     }
@@ -69,9 +115,22 @@ export async function POST(request: NextRequest) {
       _id: new ObjectId(userId),
     });
 
-    if (!user || !user.youtube || !user.youtube.refreshToken) {
+    if (!user) {
+      console.error("User not found:", userId);
       return NextResponse.json(
-        { success: false, error: "YouTube not connected" },
+        { success: false, error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    if (!user.youtube || !user.youtube.refreshToken) {
+      console.error("YouTube not connected for user:", userId);
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "YouTube not connected. Please reconnect your YouTube account.",
+        },
         { status: 401 }
       );
     }
@@ -90,6 +149,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Log file info for debugging
+    console.log("Uploading video:", {
+      title,
+      fileSize: videoFile.size,
+      fileType: videoFile.type,
+      userId,
+    });
 
     // Convert File to stream
     const buffer = Buffer.from(await videoFile.arrayBuffer());
@@ -144,6 +211,8 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    console.log("Upload successful:", response.data.id);
+
     return NextResponse.json({
       success: true,
       videoId: response.data.id!,
@@ -173,7 +242,17 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, error: "Failed to upload video" },
+      {
+        success: false,
+        error: "Failed to upload video",
+        details:
+          process.env.NODE_ENV === "development" &&
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error
+            ? (error as { message: string }).message
+            : undefined,
+      },
       { status: 500 }
     );
   }
