@@ -684,7 +684,11 @@ export async function POST(request: NextRequest) {
             if (!exportRes.ok) {
               const errorText = await exportRes.text();
               console.error("❌ Export creation failed:", errorText);
-              throw new Error(`Export creation failed: ${errorText}`);
+              // Instead of sending error to SSE, just clear flag and close stream silently
+              await clearProcessingFlag();
+              controller.close();
+              streamClosed = true;
+              return;
             }
 
             const exportData: ExportResponse = await exportRes.json();
@@ -749,7 +753,11 @@ export async function POST(request: NextRequest) {
                   exportStatus === "error"
                 ) {
                   console.error("❌ Export failed");
-                  throw new Error("Export failed");
+                  // Instead of sending error to SSE, just clear flag and close stream silently
+                  await clearProcessingFlag();
+                  controller.close();
+                  streamClosed = true;
+                  return;
                 }
               }
 
@@ -832,17 +840,11 @@ export async function POST(request: NextRequest) {
             });
           } catch (error) {
             console.error("❌ Export error:", error);
-            await sendUpdate({
-              status: "error",
-              message: "Export failed",
-              error: error instanceof Error ? error.message : String(error),
-              short_info: {
-                id: bestShort.id,
-                title: bestShort.name,
-                virality_score: bestShort.virality_score,
-              },
-            });
-            // Do not close stream here, let the final block handle it
+            // Instead of sending error to SSE, just clear flag and close stream silently
+            await clearProcessingFlag();
+            controller.close();
+            streamClosed = true;
+            return;
           }
 
           console.log("🏁 Clearing processing flag and closing stream");
