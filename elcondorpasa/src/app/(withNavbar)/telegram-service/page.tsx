@@ -11,6 +11,11 @@ import {
   Clock,
   Hash,
   Trash2,
+  BookOpen,
+  ExternalLink,
+  Mail,
+  Key,
+  Send,
 } from "lucide-react";
 import CursorGlow from "@/components/CursorGlow";
 import ParticleBackground from "@/components/yourclip/ParticleBackground";
@@ -180,6 +185,224 @@ export default function OTPTestPage() {
           </motion.div>
 
           <div className="space-y-6">
+            {/* Connection Guide Section */}
+            <motion.div
+              variants={fadeInVariants}
+              initial="hidden"
+              animate="visible"
+              custom={0.05}
+              className="rounded-3xl p-6 sm:p-8 shadow-2xl"
+              style={{
+                backgroundColor: "rgba(31, 31, 31, 0.3)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+            >
+              <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-pink-400" />
+                How to Connect with Telegram
+              </h3>
+
+              <div className="space-y-4">
+                {/* Step 1 */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="flex gap-3"
+                >
+                  <div
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                    style={{
+                      backgroundColor: "rgba(236, 72, 153, 0.2)",
+                      color: "#EC4899",
+                    }}
+                  >
+                    1
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-300">
+                      Open Telegram on your device
+                    </p>
+                  </div>
+                </motion.div>
+
+                {/* Step 2 */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex gap-3"
+                >
+                  <div
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                    style={{
+                      backgroundColor: "rgba(236, 72, 153, 0.2)",
+                      color: "#EC4899",
+                    }}
+                  >
+                    2
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-300">
+                      Invite Reeru Bot{" "}
+                      <a
+                        href="http://t.me/ReeruBot"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-pink-400 hover:text-pink-300 transition-colors"
+                      >
+                        @ReeruBot
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </p>
+                  </div>
+                </motion.div>
+
+                {/* Step 3 */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="flex gap-3"
+                >
+                  <div
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                    style={{
+                      backgroundColor: "rgba(236, 72, 153, 0.2)",
+                      color: "#EC4899",
+                    }}
+                  >
+                    3
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-300">
+                      Type{" "}
+                      <code
+                        className="px-2 py-1 rounded text-sm font-mono"
+                        style={{
+                          backgroundColor: "rgba(0, 0, 0, 0.3)",
+                          color: "#EC4899",
+                        }}
+                      >
+                        /start
+                      </code>{" "}
+                      in the chat
+                    </p>
+                  </div>
+                </motion.div>
+
+                {/* Step 4 */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="flex gap-3"
+                >
+                  <div
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                    style={{
+                      backgroundColor: "rgba(236, 72, 153, 0.2)",
+                      color: "#EC4899",
+                    }}
+                  >
+                    4
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-300">
+                      Send your ReeruAI registered email to the Telegram bot
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-400">
+                      <Mail className="w-3 h-3" />
+                      <span>Use the same email as your ReeruAI account</span>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Step 5 */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 }}
+                  className="flex gap-3"
+                >
+                  <div
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                    style={{
+                      backgroundColor: "rgba(236, 72, 153, 0.2)",
+                      color: "#EC4899",
+                    }}
+                  >
+                    5
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-300">
+                      Return to this website and generate a 6-digit OTP code
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-400">
+                      <Key className="w-3 h-3" />
+                      <span>Click "Generate OTP" button below</span>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Step 6 */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.6 }}
+                  className="flex gap-3"
+                >
+                  <div
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+                    style={{
+                      backgroundColor: "rgba(236, 72, 153, 0.2)",
+                      color: "#EC4899",
+                    }}
+                  >
+                    6
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-300">
+                      Send the OTP code to the bot on Telegram
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-gray-400">
+                      <Send className="w-3 h-3" />
+                      <span>Your account will be connected automatically</span>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Bot Link Button */}
+              <motion.a
+                href="http://t.me/ReeruBot"
+                target="_blank"
+                rel="noopener noreferrer"
+                variants={scaleVariants}
+                initial="idle"
+                whileHover="hover"
+                whileTap="tap"
+                className="w-full mt-6 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 font-semibold"
+                style={{
+                  boxShadow: "0 10px 30px rgba(59, 130, 246, 0.3)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow =
+                    "0 15px 40px rgba(59, 130, 246, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow =
+                    "0 10px 30px rgba(59, 130, 246, 0.3)";
+                }}
+              >
+                <MessageCircle className="w-4 h-4" />
+                Open Reeru Bot
+                <ExternalLink className="w-4 h-4" />
+              </motion.a>
+            </motion.div>
+
             {/* Current Status */}
             <motion.div
               variants={fadeInVariants}
