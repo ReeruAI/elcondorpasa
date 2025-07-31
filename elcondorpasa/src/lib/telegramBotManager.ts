@@ -77,21 +77,12 @@ class TelegramBotManager {
         );
       }
 
-      console.log("🤖 Creating new Telegram Bot instance...");
-      const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-      const newBot = new TelegramBot(token, {
-        webHook: {
-          port,
-        },
-      });
-
-      const webhookUrl =
-        process.env.TELEGRAM_WEBHOOK_URL || `https://yourdomain.com/${token}`;
-      await newBot.setWebHook(webhookUrl);
+      console.log("🤖 Creating new Telegram Bot instance (polling mode)...");
+      const newBot = new TelegramBot(token, { polling: true });
 
       this.setupHandlers(newBot);
 
-      console.log("✅ Telegram Bot initialized successfully");
+      console.log("✅ Telegram Bot initialized successfully (polling mode)");
       return newBot;
     } catch (error) {
       console.error("❌ Failed to initialize Telegram Bot:", error);
