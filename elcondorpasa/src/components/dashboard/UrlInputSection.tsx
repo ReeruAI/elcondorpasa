@@ -1,5 +1,5 @@
-import { motion } from "framer-motion";
-import { Link, Zap, Loader2, CheckCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Link, Zap, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useState, useRef, MouseEvent } from "react";
 
 interface UrlInputSectionProps {
@@ -9,6 +9,8 @@ interface UrlInputSectionProps {
   onSubmit: (e: React.FormEvent) => void;
   onCheckProgress?: () => void;
   isProcessing?: boolean;
+  error?: string | null; // Add error prop
+  setError?: (error: string | null) => void; // Add setError prop
 }
 
 export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
@@ -18,6 +20,8 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
   onSubmit,
   onCheckProgress,
   isProcessing = false,
+  error = null,
+  setError,
 }) => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
@@ -35,6 +39,14 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
 
   const handleMouseEnter = () => setIsHovered(true);
   const handleMouseLeave = () => setIsHovered(false);
+
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUrl(e.target.value);
+    // Clear error when user starts typing
+    if (error && setError) {
+      setError(null);
+    }
+  };
 
   return (
     <motion.div
@@ -79,7 +91,7 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
           <div className="p-3 rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-600/20">
             <Link className="w-6 h-6 text-pink-400" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
             Generate from YouTube URL
           </h2>
         </div>
@@ -89,27 +101,62 @@ export const UrlInputSection: React.FC<UrlInputSectionProps> = ({
             <input
               type="url"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={handleUrlChange}
               placeholder="Paste YouTube URL here..."
-              className="w-full px-6 py-4 rounded-2xl text-white placeholder-gray-400 focus:outline-none transition-all duration-300"
+              className={`w-full px-6 py-4 rounded-2xl text-white placeholder-gray-400 focus:outline-none transition-all duration-300 ${
+                error ? "pr-12" : ""
+              }`}
               style={{
                 backgroundColor: "rgba(255, 255, 255, 0.05)",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
+                border: error
+                  ? "1px solid rgba(248, 113, 113, 0.5)"
+                  : "1px solid rgba(255, 255, 255, 0.1)",
                 backdropFilter: "blur(10px)",
                 WebkitBackdropFilter: "blur(10px)",
               }}
               onFocus={(e) => {
-                e.target.style.border = "1px solid rgba(214, 140, 184, 0.5)";
-                e.target.style.boxShadow = "0 0 20px rgba(214, 140, 184, 0.2)";
+                if (!error) {
+                  e.target.style.border = "1px solid rgba(214, 140, 184, 0.5)";
+                  e.target.style.boxShadow =
+                    "0 0 20px rgba(214, 140, 184, 0.2)";
+                }
               }}
               onBlur={(e) => {
-                e.target.style.border = "1px solid rgba(255, 255, 255, 0.1)";
-                e.target.style.boxShadow = "none";
+                if (!error) {
+                  e.target.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+                  e.target.style.boxShadow = "none";
+                }
               }}
               required
               disabled={isProcessing}
             />
+            {error && (
+              <AlertCircle className="absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-red-400" />
+            )}
           </div>
+
+          {/* Error message */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="p-4 rounded-xl"
+                style={{
+                  backgroundColor: "rgba(248, 113, 113, 0.1)",
+                  border: "1px solid rgba(248, 113, 113, 0.2)",
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)",
+                }}
+              >
+                <p className="text-sm text-red-400 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="flex flex-col sm:flex-row gap-4">
             <motion.button

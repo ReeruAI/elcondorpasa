@@ -15,8 +15,37 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
 
   if (!code) {
-    return NextResponse.redirect(
-      new URL("/your-clip?error=no_code", request.url)
+    // Return HTML that closes window with error
+    return new NextResponse(
+      `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Authentication Failed</title>
+        </head>
+        <body>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({
+                type: 'youtube-auth',
+                status: 'error',
+                error: 'no_code'
+              }, '*');
+              window.close();
+            } else {
+              // Fallback if no opener
+              window.location.href = '/your-clip?error=no_code';
+            }
+          </script>
+          <p>Authentication failed. This window should close automatically.</p>
+        </body>
+      </html>
+      `,
+      {
+        headers: {
+          "Content-Type": "text/html",
+        },
+      }
     );
   }
 
@@ -50,13 +79,76 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.redirect(
-      new URL("/your-clip?youtube=connected", request.url)
+    // Return HTML that closes window on success
+    return new NextResponse(
+      `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Authentication Successful</title>
+        </head>
+        <body>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({
+                type: 'youtube-auth',
+                status: 'success',
+                data: {
+                  channelName: ${JSON.stringify(userInfo.name)},
+                  email: ${JSON.stringify(userInfo.email)}
+                }
+              }, '*');
+              window.close();
+            } else {
+              // Fallback if no opener
+              window.location.href = '/your-clip?youtube=connected';
+            }
+          </script>
+          <p>Authentication successful! This window should close automatically.</p>
+          <p>If it doesn't close, you can <a href="#" onclick="window.close()">close it manually</a>.</p>
+        </body>
+      </html>
+      `,
+      {
+        headers: {
+          "Content-Type": "text/html",
+        },
+      }
     );
   } catch (error) {
     console.error("Error in YouTube callback:", error);
-    return NextResponse.redirect(
-      new URL("/your-clip?error=auth_failed", request.url)
+
+    // Return HTML that closes window with error
+    return new NextResponse(
+      `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Authentication Failed</title>
+        </head>
+        <body>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({
+                type: 'youtube-auth',
+                status: 'error',
+                error: 'auth_failed'
+              }, '*');
+              window.close();
+            } else {
+              // Fallback if no opener
+              window.location.href = '/your-clip?error=auth_failed';
+            }
+          </script>
+          <p>Authentication failed. This window should close automatically.</p>
+        </body>
+      </html>
+      `,
+      {
+        headers: {
+          "Content-Type": "text/html",
+        },
+      }
     );
   }
 }

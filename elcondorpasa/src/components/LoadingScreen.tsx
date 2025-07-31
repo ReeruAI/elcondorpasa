@@ -9,8 +9,15 @@ export default function LoadingScreen() {
   const [progress, setProgress] = useState(0);
   const [logoAnimated, setLogoAnimated] = useState(false);
   const [textAnimated, setTextAnimated] = useState(false);
+  const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
+    // Set window size on mount
+    setWindowSize({
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
+
     // Check if this is the first visit
     const hasVisited = sessionStorage.getItem("hasVisited");
 
@@ -75,26 +82,27 @@ export default function LoadingScreen() {
     >
       {/* Animated background particles */}
       <div className="absolute inset-0 overflow-hidden">
-        {[...Array(20)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-pink-400/20 rounded-full"
-            initial={{
-              x: Math.random() * window.innerWidth,
-              y: Math.random() * window.innerHeight,
-            }}
-            animate={{
-              y: [null, -100],
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: Math.random() * 5 + 5,
-              repeat: Infinity,
-              delay: Math.random() * 5,
-              ease: "linear",
-            }}
-          />
-        ))}
+        {windowSize.width > 0 &&
+          [...Array(20)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-1 h-1 bg-pink-400/20 rounded-full"
+              initial={{
+                x: Math.random() * windowSize.width,
+                y: Math.random() * windowSize.height,
+              }}
+              animate={{
+                y: [null, -100],
+                opacity: [0, 1, 0],
+              }}
+              transition={{
+                duration: Math.random() * 5 + 5,
+                repeat: Infinity,
+                delay: Math.random() * 5,
+                ease: "linear",
+              }}
+            />
+          ))}
       </div>
 
       <div className="text-center w-full max-w-xs px-8 relative z-10">

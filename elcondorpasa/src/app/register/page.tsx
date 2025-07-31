@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import axios, { AxiosError } from "axios";
 import {
@@ -402,6 +402,15 @@ export default function RegisterPage() {
     [formData, handleAuthResponse, handleAuthError]
   );
 
+  const pathname = usePathname();
+  useEffect(() => {
+    const currentPath = pathname.split("/")[1];
+    const title = `ReeruAI - ${
+      currentPath.charAt(0).toUpperCase() + currentPath.slice(1)
+    }`;
+    document.title = title;
+  }, [pathname]);
+
   return (
     <div className="min-h-screen relative bg-gradient-to-b from-[#1D1D1D] to-black overflow-hidden">
       {/* Background Effects */}
@@ -435,8 +444,11 @@ export default function RegisterPage() {
             >
               <UserPlus className="w-10 h-10 text-white" />
             </motion.div>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white">
-              Create your account
+            <h2 className="text-4xl sm:text-4xl lg:text-4xl font-bold bg-gradient-to-r from-pink-200 to-pink-600 bg-clip-text text-transparent pb-4">
+              Create Your{" "}
+              <span className="bg-gradient-to-r from-pink-400 to-purple-600 bg-clip-text text-transparent">
+                Account
+              </span>
             </h2>
             <p className="mt-3 text-base sm:text-lg text-gray-300">
               Join us to start creating amazing shorts
@@ -571,36 +583,6 @@ export default function RegisterPage() {
               </Link>
             </motion.div>
           </motion.div>
-
-          {/* Development Info */}
-          {process.env.NODE_ENV === "development" && (
-            <motion.div
-              variants={fadeInVariants}
-              initial="hidden"
-              animate="visible"
-              custom={0.7}
-              className="p-4 rounded-xl opacity-50"
-              style={{
-                backgroundColor: "rgba(59, 130, 246, 0.1)",
-                backdropFilter: "blur(10px)",
-                WebkitBackdropFilter: "blur(10px)",
-                border: "1px solid rgba(59, 130, 246, 0.3)",
-              }}
-            >
-              <h3 className="text-sm font-medium text-blue-400 mb-2">
-                Development Mode
-              </h3>
-              <p className="text-xs text-blue-300/70">
-                Google Sign-In requires NEXT_PUBLIC_GOOGLE_CLIENT_ID in
-                .env.local
-              </p>
-              {!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
-                <p className="text-xs text-red-400 mt-1">
-                  ⚠️ Google Client ID not found
-                </p>
-              )}
-            </motion.div>
-          )}
         </motion.div>
       </div>
     </div>

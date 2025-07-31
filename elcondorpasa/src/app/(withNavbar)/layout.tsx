@@ -1,3 +1,4 @@
+import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import { TokenProvider } from "@/components/Navbar";
 
@@ -12,7 +13,9 @@ export default function RootLayout({
         <Navbar />
       </div>
       {/* Main content area */}
-      <main className="">{children}</main>
+      <main>{children}</main>
+      {/* Footer */}
+      <Footer />
     </TokenProvider>
   );
 }

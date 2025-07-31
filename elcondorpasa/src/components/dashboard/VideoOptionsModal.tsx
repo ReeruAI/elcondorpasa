@@ -56,6 +56,15 @@ export const VideoOptionsModal: React.FC<ExtendedModalProps> = ({
                 <Play className="w-3 h-3" />
                 {video.channel}
               </motion.p>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="text-sm text-gray-300 flex items-center gap-2 mt-2"
+              >
+                <Play className="w-3 h-3" />
+                {video.description}
+              </motion.p>
             </div>
             <motion.button
               whileHover={{ scale: 1.1, rotate: 90 }}
