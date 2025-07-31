@@ -39,15 +39,23 @@ export async function POST(request: NextRequest) {
         telegramUsername: linkedUser.telegramUsername,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Verify OTP error:", error);
-
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to verify OTP",
+        message:
+          error instanceof Error ? error.message : "Failed to verify OTP",
       },
-      { status: error.status || 500 }
+      {
+        status:
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          typeof (error as { status?: unknown }).status === "number"
+            ? (error as { status: number }).status
+            : 500,
+      }
     );
   }
 }

@@ -32,15 +32,23 @@ export async function POST(request: NextRequest) {
         email: result.email,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Unlink error:", error);
-
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to unlink account",
+        message:
+          error instanceof Error ? error.message : "Failed to unlink account",
       },
-      { status: error.status || 500 }
+      {
+        status:
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          typeof (error as { status?: unknown }).status === "number"
+            ? (error as { status: number }).status
+            : 500,
+      }
     );
   }
 }

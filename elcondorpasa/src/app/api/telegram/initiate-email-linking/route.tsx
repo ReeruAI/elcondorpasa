@@ -42,28 +42,41 @@ export async function POST(request: NextRequest) {
         email: result.email,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Initiate email linking error:", error);
 
     // Get error code for structured error handling
     let errorCode = "unknown_error";
-    if (error.message?.includes("Email tidak ditemukan")) {
+    const message =
+      typeof error === "object" &&
+      error !== null &&
+      "message" in error &&
+      typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "Failed to initiate email linking";
+    if (message.includes("Email tidak ditemukan")) {
       errorCode = "email_not_found";
-    } else if (error.message?.includes("sudah terhubung dengan user lain")) {
+    } else if (message.includes("sudah terhubung dengan user lain")) {
       errorCode = "telegram_already_linked_to_other_user";
-    } else if (
-      error.message?.includes("sudah terhubung dengan akun Telegram lain")
-    ) {
+    } else if (message.includes("sudah terhubung dengan akun Telegram lain")) {
       errorCode = "email_already_linked_to_other_telegram";
     }
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to initiate email linking",
-        errorCode: errorCode,
+        message,
+        errorCode,
       },
-      { status: error.status || 500 }
+      {
+        status:
+          typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          typeof (error as { status?: unknown }).status === "number"
+            ? (error as { status: number }).status
+            : 500,
+      }
     );
   }
 }

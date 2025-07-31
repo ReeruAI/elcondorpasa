@@ -27,7 +27,7 @@ const userStates = new Map<
 const processVideoWithKlap = async (
   videoUrl: string,
   chatId: number,
-  userId: number
+  userId: string
 ) => {
   const API_URL = `${
     process.env.API_BASE_URL || "http://localhost:3000"
@@ -47,6 +47,10 @@ const processVideoWithKlap = async (
 
     if (!response.ok) {
       throw new Error(`API responded with status: ${response.status}`);
+    }
+
+    if (userId) {
+      console.log(`📊 Processing video for user ${userId}...`);
     }
 
     const reader = response.body?.getReader();
@@ -106,8 +110,16 @@ const processVideoWithKlap = async (
                     message_id: messageId,
                     parse_mode: "Markdown",
                   });
-                } catch (editError) {
+                } catch (editError: unknown) {
                   // Message might be identical, ignore error
+                  if (editError instanceof Error) {
+                    console.error(
+                      "❌ Error editing message:",
+                      editError.message
+                    );
+                  } else {
+                    console.error("❌ Error editing message:", editError);
+                  }
                 }
               } else {
                 const sentMessage = await bot.sendMessage(
@@ -232,19 +244,27 @@ const processVideoWithKlap = async (
               }
               break;
             }
-          } catch (parseError) {
-            console.error("Error parsing SSE data:", parseError);
+          } catch (parseError: unknown) {
+            if (parseError instanceof Error) {
+              console.error("Error parsing SSE data:", parseError.message);
+            } else {
+              console.error("Error parsing SSE data:", parseError);
+            }
           }
         }
       }
     }
-  } catch (error: any) {
-    console.error("❌ Klap API Error:", error);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("❌ Klap API Error:", error.message);
+    } else {
+      console.error("❌ Klap API Error:", error);
+    }
 
     const errorMessage =
       `❌ *Error*\n\n` +
       `Failed to process your video.\n` +
-      `Error: ${error.message || "Unknown error"}\n\n` +
+      `Error: ${error instanceof Error ? error.message : "Unknown error"}\n\n` +
       `Please try again later or contact support.`;
 
     if (messageId) {
@@ -262,10 +282,12 @@ const processVideoWithKlap = async (
 };
 
 // Handle callback queries (video generation)
-bot.on("callback_query", async (query: any) => {
-  const chatId = query.message.chat.id;
-  const data = query.data;
-  const messageId = query.message.message_id;
+import type { CallbackQuery, Message } from "node-telegram-bot-api";
+bot.on("callback_query", async (query: CallbackQuery) => {
+  const message = query.message as Message;
+  const chatId = message.chat.id;
+  const data = query.data || "";
+  const messageId = message.message_id;
   const userId = query.from.id;
   const userName = query.from.first_name;
 
@@ -291,9 +313,13 @@ bot.on("callback_query", async (query: any) => {
         }
       );
 
-      await processVideoWithKlap(videoUrl, chatId, userId);
-    } catch (error: any) {
-      console.error("❌ Error handling callback query:", error);
+      await processVideoWithKlap(videoUrl, chatId, String(userId));
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("❌ Error handling callback query:", error.message);
+      } else {
+        console.error("❌ Error handling callback query:", error);
+      }
 
       await bot.answerCallbackQuery(query.id, {
         text: "❌ Error processing request",
@@ -310,11 +336,11 @@ bot.on("callback_query", async (query: any) => {
 });
 
 // Handle incoming messages - Email → OTP Flow
-bot.on("message", async (msg: any) => {
+bot.on("message", async (msg: Message) => {
   const chatId = msg.chat.id;
   const text = msg.text;
-  const name = msg.from.first_name;
-  const username = msg.from.username;
+  const name = msg.from?.first_name || "User";
+  const username = msg.from?.username || "";
 
   console.log(`📩 Message from ${name} (${chatId}): ${text}`);
 
@@ -372,13 +398,19 @@ bot.on("message", async (msg: any) => {
             { parse_mode: "Markdown" }
           );
         }
-      } catch (error: any) {
-        console.error("❌ Complete email linking error:", error);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          console.error("❌ Complete email linking error:", error.message);
+        } else {
+          console.error("❌ Complete email linking error:", error);
+        }
 
         let errorMessage = "❌ *Verification Failed*\n\n";
 
-        if (error.response?.data?.message) {
-          if (error.response.data.message.includes("Invalid OTP")) {
+        // Try to access error.response?.data?.message if possible
+        const err = error as { response?: { data?: { message?: string } } };
+        if (err.response?.data?.message) {
+          if (err.response.data.message.includes("Invalid OTP")) {
             errorMessage +=
               "❌ *Invalid or Expired OTP*\n\n" +
               "The OTP code is either invalid, expired, or already used.\n\n" +
@@ -387,7 +419,7 @@ bot.on("message", async (msg: any) => {
               "2. Generate a new OTP code\n" +
               "3. Send the new code here";
           } else if (
-            error.response.data.message.includes("verification session expired")
+            err.response.data.message.includes("verification session expired")
           ) {
             errorMessage +=
               "⏰ *Session Expired*\n\n" +
@@ -395,7 +427,7 @@ bot.on("message", async (msg: any) => {
               "💡 *Solution:* Send your email address again to restart.";
             userStates.delete(chatId);
           } else {
-            errorMessage += error.response.data.message;
+            errorMessage += err.response.data.message;
           }
         } else {
           errorMessage += "Unable to verify OTP. Please try again.";
@@ -470,11 +502,18 @@ bot.on("message", async (msg: any) => {
           { parse_mode: "Markdown" }
         );
       }
-    } catch (error: any) {
-      console.log("❌ Email initiation error:", error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.log("❌ Email initiation error:", error.message);
+      } else {
+        console.log("❌ Email initiation error:", error);
+      }
 
       let errorMessage = "❌ *Email Verification Failed*\n\n";
-      const errorCode = error.response?.data?.errorCode;
+      const err = error as {
+        response?: { data?: { message?: string; errorCode?: string } };
+      };
+      const errorCode = err.response?.data?.errorCode;
 
       switch (errorCode) {
         case "email_not_found":
@@ -507,7 +546,8 @@ bot.on("message", async (msg: any) => {
 
         default:
           errorMessage += `${
-            error.response?.data?.message || error.message
+            err.response?.data?.message ||
+            (error instanceof Error ? error.message : "Unknown error")
           }\n\n💡 Please try again or contact support.`;
       }
 
@@ -531,9 +571,9 @@ bot.on("message", async (msg: any) => {
 });
 
 // Commands
-bot.onText(/\/start/, async (msg: any) => {
+bot.onText(/\/start/, async (msg: Message) => {
   const chatId = msg.chat.id;
-  const name = msg.from.first_name;
+  const name = msg.from?.first_name || "User";
 
   await bot.sendMessage(
     chatId,
@@ -547,7 +587,7 @@ bot.onText(/\/start/, async (msg: any) => {
   );
 });
 
-bot.onText(/\/help/, async (msg: any) => {
+bot.onText(/\/help/, async (msg: Message) => {
   const chatId = msg.chat.id;
 
   await bot.sendMessage(
@@ -568,9 +608,9 @@ bot.onText(/\/help/, async (msg: any) => {
   );
 });
 
-bot.onText(/\/status/, async (msg: any) => {
+bot.onText(/\/status/, async (msg: Message) => {
   const chatId = msg.chat.id;
-  const name = msg.from.first_name;
+  const name = msg.from?.first_name || "User";
 
   try {
     // Check if user is linked by trying to get user info
@@ -607,7 +647,12 @@ bot.onText(/\/status/, async (msg: any) => {
         { parse_mode: "Markdown" }
       );
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("❌ Status check error:", error.message);
+    } else {
+      console.error("❌ Status check error:", error);
+    }
     await bot.sendMessage(
       chatId,
       `📊 *Connection Status*\n\n` +
@@ -620,9 +665,8 @@ bot.onText(/\/status/, async (msg: any) => {
   }
 });
 
-bot.onText(/\/unlink/, async (msg: any) => {
+bot.onText(/\/unlink/, async (msg: Message) => {
   const chatId = msg.chat.id;
-  const name = msg.from.first_name;
 
   try {
     const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
@@ -659,13 +703,17 @@ bot.onText(/\/unlink/, async (msg: any) => {
         { parse_mode: "Markdown" }
       );
     }
-  } catch (error: any) {
-    console.error("❌ Unlink error:", error);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("❌ Unlink error:", error.message);
+    } else {
+      console.error("❌ Unlink error:", error);
+    }
 
     let errorMessage = "❌ *Failed to Disconnect Account*\n\n";
-
-    if (error.response?.data?.message) {
-      errorMessage += error.response.data.message;
+    const err = error as { response?: { data?: { message?: string } } };
+    if (err.response?.data?.message) {
+      errorMessage += err.response.data.message;
     } else {
       errorMessage += "Unable to process unlink request. Please try again.";
     }
@@ -674,9 +722,9 @@ bot.onText(/\/unlink/, async (msg: any) => {
   }
 });
 
-bot.onText(/\/testReminder/, async (msg: any) => {
+bot.onText(/\/testReminder/, async (msg: Message) => {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const userId = msg.from?.id;
 
   console.log(`🧪 Test reminder requested by ${userId}`);
 
@@ -687,8 +735,12 @@ bot.onText(/\/testReminder/, async (msg: any) => {
       `✅ *Test Reminder Sent*\n\nCheck your messages for the daily reminder format!`,
       { parse_mode: "Markdown" }
     );
-  } catch (error: any) {
-    console.error("❌ Error testing reminder:", error);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("❌ Error testing reminder:", error.message);
+    } else {
+      console.error("❌ Error testing reminder:", error);
+    }
     await bot.sendMessage(
       chatId,
       `❌ *Error*\n\nFailed to send test reminder. Please make sure your account is linked.`,
@@ -709,8 +761,12 @@ setInterval(() => {
 }, 5 * 60 * 1000); // Clean every 5 minutes
 
 // Error handling
-bot.on("polling_error", (error: any) => {
-  console.log("❌ Polling error:", error.code, error.message);
+bot.on("polling_error", (error: unknown) => {
+  if (error instanceof Error) {
+    console.log("❌ Polling error:", error.message);
+  } else {
+    console.log("❌ Polling error:", error);
+  }
 });
 
 console.log("✅ Bot setup complete. Waiting for messages...");
