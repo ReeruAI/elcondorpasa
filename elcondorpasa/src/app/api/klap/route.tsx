@@ -670,31 +670,71 @@ export async function POST(request: NextRequest) {
             const exportUrl = `https://api.klap.app/v2/projects/${bestShort.folder_id}/${bestShort.id}/exports`;
             console.log("📤 Export URL:", exportUrl);
 
-            const exportRes = await fetch(exportUrl, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${KLAP_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({}),
-            });
-
-            console.log("📤 Export response status:", exportRes.status);
-
-            if (!exportRes.ok) {
-              const errorText = await exportRes.text();
-              console.error("❌ Export creation failed:", errorText);
-              // Instead of sending error to SSE, just clear flag and close stream silently
+            // Add retry logic for export creation
+            let exportRes;
+            let exportData: ExportResponse | null = null;
+            let exportId: string | null = null;
+            const maxExportCreateRetries = 5;
+            let exportCreateSuccess = false;
+            for (
+              let exportCreateAttempt = 0;
+              exportCreateAttempt < maxExportCreateRetries;
+              exportCreateAttempt++
+            ) {
+              exportRes = await fetch(exportUrl, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${KLAP_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
+              });
+              console.log(
+                `📤 Export response status (attempt ${
+                  exportCreateAttempt + 1
+                }):`,
+                exportRes.status
+              );
+              if (exportRes.ok) {
+                exportData = await exportRes.json();
+                if (exportData && exportData.id) {
+                  exportId = exportData.id;
+                  exportCreateSuccess = true;
+                  console.log("✅ Export created with ID:", exportId);
+                  break;
+                } else {
+                  console.error("❌ Export response missing id field.");
+                }
+              } else {
+                const errorText = await exportRes.text();
+                console.error(
+                  `❌ Export creation failed (attempt ${
+                    exportCreateAttempt + 1
+                  }):`,
+                  errorText
+                );
+                if (exportCreateAttempt < maxExportCreateRetries - 1) {
+                  await sendUpdate({
+                    status: "waiting_export_retry",
+                    message: `Export creation failed, retrying... (${
+                      exportCreateAttempt + 2
+                    }/${maxExportCreateRetries})`,
+                    progress: 91,
+                  });
+                  await delay(10000);
+                }
+              }
+            }
+            if (!exportCreateSuccess || !exportData || !exportId) {
+              await sendUpdate({
+                status: "error",
+                message: "Export creation failed after multiple retries.",
+                progress: 91,
+              });
               await clearProcessingFlag();
-              controller.close();
-              streamClosed = true;
+              // Do not close stream here, let the final block handle it
               return;
             }
-
-            const exportData: ExportResponse = await exportRes.json();
-            const exportId = exportData.id;
-            console.log("✅ Export created with ID:", exportId);
-
             await sendUpdate({
               status: "waiting_export",
               message: `Waiting for export to complete...`,
@@ -753,10 +793,8 @@ export async function POST(request: NextRequest) {
                   exportStatus === "error"
                 ) {
                   console.error("❌ Export failed");
-                  // Instead of sending error to SSE, just clear flag and close stream silently
                   await clearProcessingFlag();
-                  controller.close();
-                  streamClosed = true;
+                  // Do not close stream here, let the final block handle it
                   return;
                 }
               }
@@ -840,10 +878,8 @@ export async function POST(request: NextRequest) {
             });
           } catch (error) {
             console.error("❌ Export error:", error);
-            // Instead of sending error to SSE, just clear flag and close stream silently
             await clearProcessingFlag();
-            controller.close();
-            streamClosed = true;
+            // Do not close stream here, let the final block handle it
             return;
           }
 
