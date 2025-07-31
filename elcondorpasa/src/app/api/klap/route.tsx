@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
         console.log("📡 Stream started for user:", finalUserId);
         const encoder = new TextEncoder();
         let isProcessingFlagCleared = false;
+        let streamClosed = false;
 
         // Helper function to clear processing flag
         const clearProcessingFlag = async () => {
@@ -152,6 +153,13 @@ export async function POST(request: NextRequest) {
 
         // Helper function to send SSE data with proper await
         const sendUpdate = async (data: SSEUpdateData) => {
+          if (streamClosed) {
+            console.warn(
+              "⚠️ Attempted to send update after stream closed",
+              data
+            );
+            return false;
+          }
           try {
             const timestamp = new Date().toISOString();
             const message = `data: ${JSON.stringify({
@@ -498,6 +506,7 @@ export async function POST(request: NextRequest) {
                 });
                 await clearProcessingFlag();
                 controller.close();
+                streamClosed = true;
                 return;
               }
 
@@ -614,6 +623,7 @@ export async function POST(request: NextRequest) {
             });
             await clearProcessingFlag();
             controller.close();
+            streamClosed = true;
             return;
           }
 
@@ -832,6 +842,7 @@ export async function POST(request: NextRequest) {
                 virality_score: bestShort.virality_score,
               },
             });
+            // Do not close stream here, let the final block handle it
           }
 
           console.log("🏁 Clearing processing flag and closing stream");
@@ -846,6 +857,7 @@ export async function POST(request: NextRequest) {
           });
           await clearProcessingFlag();
           controller.close();
+          streamClosed = true;
         }
       },
     });
