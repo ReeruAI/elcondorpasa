@@ -173,7 +173,7 @@ export default function DownloadButton({
       let loaded = 0;
 
       const reader = response.body?.getReader();
-      const chunks: Uint8Array[] = [];
+      const chunks: ArrayBuffer[] = [];
 
       if (reader) {
         while (true) {
@@ -181,7 +181,8 @@ export default function DownloadButton({
 
           if (done) break;
 
-          chunks.push(value);
+          // Convert Uint8Array to ArrayBuffer
+          chunks.push(value.slice().buffer);
           loaded += value.length;
 
           if (total > 0 && showProgress) {
