@@ -109,22 +109,30 @@ export async function POST(request: NextRequest) {
 // Helper function to trigger background processing
 async function triggerBackgroundJob(jobId: string) {
   try {
-    // Option 1: Use QStash (Upstash) for reliable background jobs
+    // Option 1: Use QStash V2 (Upstash) for reliable background jobs
     if (process.env.QSTASH_TOKEN) {
-      const response = await fetch("https://qstash.upstash.io/v1/publish/", {
+      const response = await fetch("https://qstash.upstash.io/v2/publish", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${process.env.QSTASH_TOKEN}`,
           "Content-Type": "application/json",
-          "Upstash-Forward-Url": `${process.env.API_BASE_URL}/api/klap/worker`,
-          "Upstash-Timeout": "1800s", // 30 minutes
+          "Upstash-Delay": "1s", // Optional: delay before execution
           "Upstash-Retries": "3",
         },
-        body: JSON.stringify({ jobId }),
+        body: JSON.stringify({
+          url: `${process.env.API_BASE_URL}/api/klap/worker`,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ jobId }),
+        }),
       });
 
       if (!response.ok) {
         console.error("QStash error:", await response.text());
+      } else {
+        const result = await response.json();
+        console.log("QStash job queued:", result);
       }
     }
     // Option 2: Direct call (less reliable but works for testing)
