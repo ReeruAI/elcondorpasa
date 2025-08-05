@@ -50,7 +50,7 @@ if (shouldInitialize) {
     ) => {
       const API_URL = `${
         process.env.API_BASE_URL || "http://localhost:3000"
-      }/api/klap`;
+      }/api/klap/initiate`;
       console.log(`Processing video for user ${userId}: ${videoUrl}`);
       try {
         // Send initial processing message
