@@ -51,9 +51,12 @@ if (shouldInitialize) {
       const API_URL = `${
         process.env.API_BASE_URL || "http://localhost:3000"
       }/api/klap`;
+      // use userId for tracking purposes
+      console.log(
+        `📹 Processing video for chatId: ${chatId}, userId: ${userId}`
+      );
       try {
         // Send initial processing message
-        console.log(`📹 Processing video for user ${userId}: ${videoUrl}`);
         if (bot) {
           await bot.sendMessage(
             chatId,
@@ -535,14 +538,12 @@ if (shouldInitialize) {
       try {
         // Check if user is linked by trying to get user info
         const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
-        console.log(`🔍 Checking status via: ${API_URL}/api/telegram/check-status`);
-        
         const response = await axios.post(
           `${API_URL}/api/telegram/check-status`,
           { chatId: chatId },
           {
             headers: { "Content-Type": "application/json" },
-            timeout: 15000, // Increase timeout to 15 seconds
+            timeout: 5000,
           }
         );
 
@@ -570,78 +571,21 @@ if (shouldInitialize) {
           );
         }
       } catch (error: unknown) {
-        console.error("❌ Status check error:", error);
-        
-        let errorMessage = `📊 *Connection Status*\n\n`;
-        
-        // Handle different types of errors
-        if (axios.isAxiosError(error)) {
-          const status = error.response?.status;
-          console.log(`🔍 HTTP Status: ${status}`);
-          
-          switch (status) {
-            case 502:
-              errorMessage += `⚠️ *Server Temporarily Unavailable*\n\n` +
-                `👤 Name: ${name}\n` +
-                `🆔 Chat ID: ${chatId}\n\n` +
-                `🔧 The server is currently experiencing issues.\n` +
-                `⏰ Please try again in a few minutes.\n\n` +
-                `💡 *Alternative:* Send your email address to check connection status.`;
-              break;
-            case 500:
-              errorMessage += `❌ *Internal Server Error*\n\n` +
-                `👤 Name: ${name}\n` +
-                `🆔 Chat ID: ${chatId}\n\n` +
-                `🔧 Something went wrong on our end.\n` +
-                `💡 *Try:* Send your email address to check if you're connected.`;
-              break;
-            case 404:
-              errorMessage += `❌ *Service Not Found*\n\n` +
-                `👤 Name: ${name}\n` +
-                `🆔 Chat ID: ${chatId}\n\n` +
-                `🔧 Status service is not available.\n` +
-                `💡 *Try:* Send your email address instead.`;
-              break;
-            default:
-              errorMessage += `❌ *Connection Error*\n\n` +
-                `👤 Name: ${name}\n` +
-                `🆔 Chat ID: ${chatId}\n\n` +
-                `🔧 Unable to check status (Error ${status}).\n` +
-                `� *Try:* Send your email address to verify connection.`;
-          }
-        } else if (error instanceof Error) {
-          const errorWithCode = error as Error & { code?: string };
-          if (errorWithCode.code === 'ECONNREFUSED') {
-            errorMessage += `🔌 *Server Connection Failed*\n\n` +
-              `👤 Name: ${name}\n` +
-              `🆔 Chat ID: ${chatId}\n\n` +
-              `⚠️ Cannot connect to server.\n` +
-              `⏰ Please try again later.\n\n` +
-              `💡 *Alternative:* Send your email to check connection.`;
-          } else if (error.message.includes('timeout')) {
-            errorMessage += `⏱️ *Request Timeout*\n\n` +
-              `👤 Name: ${name}\n` +
-              `🆔 Chat ID: ${chatId}\n\n` +
-              `⚠️ Server is responding slowly.\n` +
-              `⏰ Please try again in a moment.\n\n` +
-              `💡 *Alternative:* Send your email address.`;
-          } else {
-            errorMessage += `❌ *Unknown Error*\n\n` +
-              `👤 Name: ${name}\n` +
-              `🆔 Chat ID: ${chatId}\n\n` +
-              `🔧 ${error.message}\n\n` +
-              `💡 *Try:* Send your email address to check connection.`;
-          }
+        if (error instanceof Error) {
+          console.error("❌ Status check error:", error.message);
         } else {
-          errorMessage += `❌ *System Error*\n\n` +
-            `👤 Name: ${name}\n` +
-            `🆔 Chat ID: ${chatId}\n\n` +
-            `🔧 Unexpected error occurred.\n` +
-            `💡 *Try:* Send your email address to check connection.`;
+          console.error("❌ Status check error:", error);
         }
-        
         if (bot) {
-          await bot.sendMessage(chatId, errorMessage, { parse_mode: "Markdown" });
+          await bot.sendMessage(
+            chatId,
+            `📊 *Connection Status*\n\n` +
+              `👤 Name: ${name}\n` +
+              `🆔 Chat ID: ${chatId}\n\n` +
+              `To check if your account is connected, send your email address. ` +
+              `The bot will tell you if it's already linked.`,
+            { parse_mode: "Markdown" }
+          );
         }
       }
     });
@@ -651,14 +595,12 @@ if (shouldInitialize) {
 
       try {
         const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
-        console.log(`🔓 Unlinking via: ${API_URL}/api/telegram/unlink`);
-        
         const response = await axios.post(
           `${API_URL}/api/telegram/unlink`,
           { chatId: chatId },
           {
             headers: { "Content-Type": "application/json" },
-            timeout: 15000, // Increase timeout
+            timeout: 10000,
           }
         );
 
@@ -687,53 +629,18 @@ if (shouldInitialize) {
           );
         }
       } catch (error: unknown) {
-        console.error("❌ Unlink error:", error);
+        if (error instanceof Error) {
+          console.error("❌ Unlink error:", error.message);
+        } else {
+          console.error("❌ Unlink error:", error);
+        }
 
         let errorMessage = "❌ *Failed to Disconnect Account*\n\n";
-        
-        if (axios.isAxiosError(error)) {
-          const status = error.response?.status;
-          console.log(`🔍 Unlink HTTP Status: ${status}`);
-          
-          switch (status) {
-            case 502:
-              errorMessage += `⚠️ *Server Temporarily Unavailable*\n\n` +
-                `🔧 The server is currently experiencing issues.\n` +
-                `⏰ Please try again in a few minutes.\n\n` +
-                `💡 Your account may still be connected. Try again later.`;
-              break;
-            case 500:
-              errorMessage += `🔧 *Internal Server Error*\n\n` +
-                `Something went wrong on our end.\n` +
-                `⏰ Please try again later.\n\n` +
-                `💡 If problem persists, contact support.`;
-              break;
-            case 404:
-              errorMessage += `❓ *Account Not Found*\n\n` +
-                `No connected account found for this Telegram.\n\n` +
-                `💡 Your account may already be disconnected.`;
-              break;
-            default:
-              errorMessage += `Network error occurred (${status}).\n` +
-                `⏰ Please try again later.`;
-          }
-        } else if (error instanceof Error) {
-          const errorWithCode = error as Error & { code?: string };
-          if (errorWithCode.code === 'ECONNREFUSED') {
-            errorMessage += `🔌 *Cannot Connect to Server*\n\n` +
-              `⚠️ Server is not responding.\n` +
-              `⏰ Please try again later.`;
-          } else if (error.message.includes('timeout')) {
-            errorMessage += `⏱️ *Request Timeout*\n\n` +
-              `Server is responding slowly.\n` +
-              `⏰ Please try again in a moment.`;
-          } else {
-            errorMessage += `🔧 ${error.message}\n\n` +
-              `⏰ Please try again later.`;
-          }
+        const err = error as { response?: { data?: { message?: string } } };
+        if (err.response?.data?.message) {
+          errorMessage += err.response.data.message;
         } else {
-          errorMessage += "Unknown error occurred.\n" +
-            "⏰ Please try again later.";
+          errorMessage += "Unable to process unlink request. Please try again.";
         }
 
         if (bot) {
