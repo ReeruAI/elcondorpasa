@@ -1,94 +1,9 @@
 // telegramBot.ts
 // This file should only be imported in Node.js runtime
 import TelegramBot from "node-telegram-bot-api";
-import axios, { AxiosError } from "axios";
+import axios from "axios";
 import type { CallbackQuery, Message } from "node-telegram-bot-api";
-import type CronServiceType from "@/lib/cronService";
-
-// Type definitions for SSE data
-interface SSEBaseData {
-  status: string;
-  message: string;
-  progress?: number;
-  tokens_remaining?: number;
-  task_id?: string;
-  project_id?: string;
-  error?: string;
-  error_code?: string;
-}
-
-interface SSECompletedData extends SSEBaseData {
-  status: "completed";
-  short: {
-    id: string;
-    title: string;
-    virality_score: number;
-    duration?: number;
-    transcript?: string;
-    description?: string;
-    captions?:
-      | {
-          tiktok?: string;
-          youtube?: string;
-          linkedin?: string;
-          instagram?: string;
-        }
-      | string;
-    export_status?: string;
-    download_url?: string;
-    export_id?: string;
-  };
-}
-
-interface SSEErrorData extends SSEBaseData {
-  status: "error";
-  error_code?: string;
-  error_details?: string;
-}
-
-type SSEData = SSECompletedData | SSEErrorData | SSEBaseData;
-
-// User state types
-interface UserState {
-  step: "waiting_email" | "waiting_otp";
-  email?: string;
-  expiresAt?: Date;
-}
-
-// API Response types
-interface EmailLinkingResponse {
-  success: boolean;
-  message?: string;
-  user?: {
-    name: string;
-    email: string;
-  };
-}
-
-interface CompleteLinkingResponse {
-  success: boolean;
-  message?: string;
-  user?: {
-    name: string;
-    email: string;
-  };
-}
-
-interface CheckStatusResponse {
-  success: boolean;
-  user?: {
-    name: string;
-    email: string;
-  };
-}
-
-interface UnlinkResponse {
-  success: boolean;
-  user?: {
-    name: string;
-    email: string;
-  };
-}
+import type CronService from "@/lib/cronService";
 
 // Prevent initialization during build or in non-runtime environments
 const shouldInitialize =
@@ -98,7 +13,7 @@ const shouldInitialize =
   !process.env.NEXT_PHASE; // Prevent during build phases
 
 let bot: TelegramBot | null = null;
-let cronService: CronServiceType | null = null;
+let cronService: CronService | null = null;
 
 if (shouldInitialize) {
   const token = process.env.TELEGRAM_BOT_TOKEN as string;
@@ -118,36 +33,28 @@ if (shouldInitialize) {
       });
 
     // Store user states (in production, use Redis or database)
-    const userStates = new Map<number, UserState>();
+    const userStates = new Map<
+      number,
+      {
+        step: "waiting_email" | "waiting_otp";
+        email?: string;
+        expiresAt?: Date;
+      }
+    >();
 
     // Helper function to process video with Klap API
     const processVideoWithKlap = async (
       videoUrl: string,
       chatId: number,
       userId: string
-    ): Promise<void> => {
+    ) => {
       const API_URL = `${
         process.env.API_BASE_URL || "http://localhost:3000"
       }/api/klap`;
+      let messageId: number | undefined;
+      let lastProgress = 0;
 
       try {
-        // Send initial processing message
-        console.log(
-          `🔄 Processing video for chatId: ${chatId}, userId: ${userId}`
-        );
-        if (bot) {
-          await bot.sendMessage(
-            chatId,
-            `🎬 *Generating Short/Reel*\n\n` +
-              `Processing video:\n${videoUrl}\n\n` +
-              `⏳ This may take a moment. We'll notify you when it's ready!`,
-            {
-              parse_mode: "Markdown",
-            }
-          );
-        }
-
-        // Make request to backend - handle SSE response
         const response = await fetch(API_URL, {
           method: "POST",
           headers: {
@@ -161,161 +68,241 @@ if (shouldInitialize) {
           throw new Error(`API responded with status: ${response.status}`);
         }
 
-        // Read the SSE stream
+        if (userId) {
+          console.log(`📊 Processing video for user ${userId}...`);
+        }
+
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
+        let buffer = "";
 
         if (!reader) {
           throw new Error("No response body");
         }
 
-        let lastData: SSEData | null = null;
-        let buffer = "";
-
-        // Read the entire stream
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-
-          // Process complete SSE messages
           const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             if (line.startsWith("data: ")) {
               try {
-                const data = JSON.parse(line.slice(6)) as SSEData;
-                lastData = data; // Keep track of the last data
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr) continue;
 
-                // You can optionally send intermediate updates here if needed
-                // For now, we'll just wait for the final result
-              } catch (e) {
-                // Ignore parse errors
-                console.log("❌ Error parsing SSE data:", e);
+                const data = JSON.parse(jsonStr);
+                console.log("📊 Klap API Update:", data.status, data.message);
+
+                if (
+                  data.progress !== undefined &&
+                  data.progress !== lastProgress
+                ) {
+                  const progressBar =
+                    "█".repeat(Math.floor(data.progress / 10)) +
+                    "░".repeat(10 - Math.floor(data.progress / 10));
+
+                  let statusEmoji = "⏳";
+                  if (data.status === "creating_task") statusEmoji = "🚀";
+                  else if (data.status === "processing") statusEmoji = "🔄";
+                  else if (data.status === "exporting_short")
+                    statusEmoji = "📦";
+                  else if (data.status === "completed") statusEmoji = "✅";
+                  else if (data.status === "error") statusEmoji = "❌";
+
+                  const progressMessage =
+                    `${statusEmoji} *Generating Short/Reel*\n\n` +
+                    `📊 Status: ${data.message}\n` +
+                    `📈 Progress: [${progressBar}] ${data.progress}%\n\n` +
+                    `${data.task_id ? `🆔 Task ID: ${data.task_id}\n` : ""}` +
+                    `${
+                      data.tokens_remaining !== undefined
+                        ? `🪙 Tokens remaining: ${data.tokens_remaining}\n`
+                        : ""
+                    }` +
+                    `⏱️ Please wait...`;
+
+                  if (messageId && bot) {
+                    try {
+                      await bot.editMessageText(progressMessage, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        parse_mode: "Markdown",
+                      });
+                    } catch (editError: unknown) {
+                      // Message might be identical, ignore error
+                      if (editError instanceof Error) {
+                        console.error(
+                          "❌ Error editing message:",
+                          editError.message
+                        );
+                      } else {
+                        console.error("❌ Error editing message:", editError);
+                      }
+                    }
+                  } else if (bot) {
+                    const sentMessage = await bot.sendMessage(
+                      chatId,
+                      progressMessage,
+                      {
+                        parse_mode: "Markdown",
+                      }
+                    );
+                    messageId = sentMessage.message_id;
+                  }
+
+                  lastProgress = data.progress;
+                }
+
+                if (data.status === "completed" && data.short && bot) {
+                  const short = data.short;
+                  const completionMessage =
+                    `✅ *Video Ready!*\n\n` +
+                    `🎬 *Title:* ${short.title}\n` +
+                    `🎯 *Virality Score:* ${short.virality_score}/100\n` +
+                    `💡 *Analysis:*\n_${short.description}_\n\n` +
+                    `📝 *Caption suggestion:*\n${
+                      short.captions?.tiktok ||
+                      short.captions ||
+                      "No caption generated"
+                    }\n\n` +
+                    `🪙 *Tokens remaining:* ${data.tokens_remaining || 0}\n\n` +
+                    `🌐 *View your short:* [Open Dashboard](${
+                      process.env.API_BASE_URL || "http://localhost:3000"
+                    }/your-clip)\n` +
+                    `🔗 *Original:* [View on YouTube](${videoUrl})`;
+
+                  if (messageId) {
+                    await bot.editMessageText(completionMessage, {
+                      chat_id: chatId,
+                      message_id: messageId,
+                      parse_mode: "Markdown",
+                      disable_web_page_preview: true,
+                    });
+                  }
+
+                  await bot.sendMessage(
+                    chatId,
+                    `🎉 *Success!*\n\n` +
+                      `Your short "${short.title}" is ready!\n\n` +
+                      `📱 *View & Download:* [${
+                        process.env.API_BASE_URL || "http://localhost:3000"
+                      }/your-clip](${
+                        process.env.API_BASE_URL || "http://localhost:3000"
+                      }/your-clip)\n\n` +
+                      `💾 *Direct download:* ${short.download_url}`,
+                    {
+                      parse_mode: "Markdown",
+                      disable_web_page_preview: false,
+                    }
+                  );
+                }
+
+                if (data.status === "error" && bot) {
+                  let errorMessage = `❌ *Processing Failed*\n\n`;
+
+                  if (data.error_code === "video_too_long") {
+                    errorMessage +=
+                      `🎬 *Video Too Long*\n\n` +
+                      `The video you selected is too long for processing.\n\n` +
+                      `📏 *Recommendation:* Use videos shorter than 10 minutes\n` +
+                      `⏱️ *Tip:* Shorter videos (2-5 minutes) work best for creating engaging shorts!`;
+                  } else if (data.error_code === "invalid_url") {
+                    errorMessage +=
+                      `🔗 *Invalid Video URL*\n\n` +
+                      `Please make sure:\n` +
+                      `• The YouTube video is public\n` +
+                      `• The URL is correct and accessible\n` +
+                      `• The video is not age-restricted`;
+                  } else if (data.error_code === "unsupported_platform") {
+                    errorMessage +=
+                      `🚫 *Unsupported Platform*\n\n` +
+                      `Currently only YouTube videos are supported.\n` +
+                      `Please share a YouTube video URL.`;
+                  } else if (data.error_code === "fetch_shorts_failed") {
+                    errorMessage +=
+                      `📥 *Fetch Failed*\n\n` +
+                      `Your video was processed successfully, but we couldn't retrieve the shorts from Klap.\n\n` +
+                      `✅ *Good news:* Your shorts are likely ready!\n` +
+                      `🌐 *Check Klap Dashboard:* https://app.klap.app\n` +
+                      `🆔 *Project ID:* ${
+                        data.project_id || "Not available"
+                      }\n\n` +
+                      `📧 *Need help?* Contact support with the Project ID above.`;
+                  } else if (data.error_code === "no_shorts_generated") {
+                    errorMessage +=
+                      `🤔 *No Shorts Generated*\n\n` +
+                      `The AI couldn't create engaging shorts from this video.\n\n` +
+                      `This might happen when:\n` +
+                      `• Video has mostly music/no clear speech\n` +
+                      `• Content is too complex or abstract\n` +
+                      `• Video quality is too low\n\n` +
+                      `💡 *Try videos with:*\n` +
+                      `• Clear speech/dialogue\n` +
+                      `• Engaging visual content\n` +
+                      `• Educational or entertaining topics\n` +
+                      `• Good audio quality`;
+                  } else {
+                    errorMessage +=
+                      `Error: ${data.message}\n` +
+                      `${
+                        data.error_details
+                          ? `\nDetails: ${data.error_details}`
+                          : ""
+                      }`;
+                  }
+
+                  errorMessage += `\n\n💡 *Try again with a different video or contact support if the problem persists.*`;
+
+                  if (messageId) {
+                    await bot.editMessageText(errorMessage, {
+                      chat_id: chatId,
+                      message_id: messageId,
+                      parse_mode: "Markdown",
+                    });
+                  } else {
+                    await bot.sendMessage(chatId, errorMessage, {
+                      parse_mode: "Markdown",
+                    });
+                  }
+                  break;
+                }
+              } catch (parseError: unknown) {
+                if (parseError instanceof Error) {
+                  console.error("Error parsing SSE data:", parseError.message);
+                } else {
+                  console.error("Error parsing SSE data:", parseError);
+                }
               }
             }
-          }
-        }
-
-        // Type guard for completed status
-        const isCompletedData = (
-          data: SSEData | null
-        ): data is SSECompletedData => {
-          return (
-            data !== null && data.status === "completed" && "short" in data
-          );
-        };
-
-        // Type guard for error status
-        const isErrorData = (data: SSEData | null): data is SSEErrorData => {
-          return data !== null && data.status === "error";
-        };
-
-        // Check the final result
-        if (isCompletedData(lastData) && bot) {
-          const short = lastData.short;
-
-          // Extract caption string
-          let captionText = "No caption generated";
-          if (typeof short.captions === "string") {
-            captionText = short.captions;
-          } else if (short.captions?.tiktok) {
-            captionText = short.captions.tiktok;
-          }
-
-          // Send success message with video details
-          const completionMessage =
-            `✅ *Video Ready!*\n\n` +
-            `🎬 *Title:* ${short.title}\n` +
-            `🎯 *Virality Score:* ${short.virality_score}/100\n` +
-            `💡 *Analysis:*\n_${
-              short.description || "No analysis available"
-            }_\n\n` +
-            `📝 *Caption suggestion:*\n${captionText}\n\n` +
-            `🪙 *Tokens remaining:* ${lastData.tokens_remaining || 0}\n\n` +
-            `🌐 *View your short:* [Open Dashboard](${
-              process.env.API_BASE_URL || "http://localhost:3000"
-            }/your-clip)\n` +
-            `🔗 *Original:* [View on YouTube](${videoUrl})`;
-
-          await bot.sendMessage(chatId, completionMessage, {
-            parse_mode: "Markdown",
-            disable_web_page_preview: true,
-          });
-
-          // Send download link message
-          await bot.sendMessage(
-            chatId,
-            `🎉 *Success!*\n\n` +
-              `Your short "${short.title}" is ready!\n\n` +
-              `📱 *View & Download:* [${
-                process.env.API_BASE_URL || "http://localhost:3000"
-              }/your-clip](${
-                process.env.API_BASE_URL || "http://localhost:3000"
-              }/your-clip)\n\n` +
-              `💾 *Direct download:* ${short.download_url || "Not available"}`,
-            {
-              parse_mode: "Markdown",
-              disable_web_page_preview: false,
-            }
-          );
-        } else if (isErrorData(lastData)) {
-          // Handle error cases
-          let errorMessage = `❌ *Processing Failed*\n\n`;
-
-          if (lastData.message) {
-            errorMessage += `Error: ${lastData.message}\n`;
-          } else {
-            errorMessage += `Failed to process your video.\n`;
-          }
-
-          // Handle specific error codes
-          if (lastData.error_code === "insufficient_tokens") {
-            errorMessage = `❌ *Insufficient Tokens*\n\nYou don't have enough tokens to process this video. Please purchase more tokens to continue.`;
-          } else if (lastData.error_code === "video_too_long") {
-            errorMessage = `❌ *Video Too Long*\n\nThe video is too long for processing. Please use a shorter video (recommended: under 10 minutes).`;
-          } else if (lastData.error_code === "invalid_url") {
-            errorMessage = `❌ *Invalid URL*\n\nPlease make sure the YouTube video is public and accessible.`;
-          }
-
-          errorMessage += `\n\nPlease try again later or contact support.`;
-
-          if (bot) {
-            await bot.sendMessage(chatId, errorMessage, {
-              parse_mode: "Markdown",
-            });
-          }
-        } else {
-          // No valid final status
-          if (bot) {
-            await bot.sendMessage(
-              chatId,
-              `❌ *Processing Error*\n\nSomething went wrong during processing. Please try again later.`,
-              {
-                parse_mode: "Markdown",
-              }
-            );
           }
         }
       } catch (error: unknown) {
-        console.error("❌ Error processing video:", error);
-
-        let errorMessage = `❌ *Error*\n\nFailed to process your video.\n`;
-
         if (error instanceof Error) {
-          // Check for fetch/network errors
-          if (error.message.includes("fetch")) {
-            errorMessage += `Connection error. Please check your internet connection.\n`;
-          } else {
-            errorMessage += `Error: ${error.message}\n`;
-          }
+          console.error("❌ Klap API Error:", error.message);
+        } else {
+          console.error("❌ Klap API Error:", error);
         }
 
-        errorMessage += `\nPlease try again later or contact support.`;
+        const errorMessage =
+          `❌ *Error*\n\n` +
+          `Failed to process your video.\n` +
+          `Error: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }\n\n` +
+          `Please try again later or contact support.`;
 
-        if (bot) {
+        if (messageId && bot) {
+          await bot.editMessageText(errorMessage, {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: "Markdown",
+          });
+        } else if (bot) {
           await bot.sendMessage(chatId, errorMessage, {
             parse_mode: "Markdown",
           });
@@ -328,7 +315,7 @@ if (shouldInitialize) {
       const message = query.message as Message;
       const chatId = message.chat.id;
       const data = query.data || "";
-      const _messageId = message.message_id;
+      const messageId = message.message_id;
       const userId = query.from.id;
       const userName = query.from.first_name;
 
@@ -339,13 +326,22 @@ if (shouldInitialize) {
 
         try {
           if (bot) {
-            // Answer the callback query to remove the loading state on the button
             await bot.answerCallbackQuery(query.id, {
               text: "🎬 Processing your video...",
               show_alert: false,
             });
 
-            // Don't send a message here - let processVideoWithKlap handle all messaging
+            await bot.sendMessage(
+              chatId,
+              `🎬 *Generating Short/Reel*\n\n` +
+                `Processing video:\n${videoUrl}\n\n` +
+                `⏳ This may take a moment. We'll notify you when it's ready!`,
+              {
+                parse_mode: "Markdown",
+                reply_to_message_id: messageId,
+              }
+            );
+
             await processVideoWithKlap(videoUrl, chatId, String(userId));
           }
         } catch (error: unknown) {
@@ -370,6 +366,7 @@ if (shouldInitialize) {
         }
       }
     });
+
     // Handle incoming messages - Email → OTP Flow
     bot.on("message", async (msg: Message) => {
       const chatId = msg.chat.id;
@@ -384,9 +381,7 @@ if (shouldInitialize) {
         return;
       }
 
-      const currentState = userStates.get(chatId) || {
-        step: "waiting_email" as const,
-      };
+      const currentState = userStates.get(chatId) || { step: "waiting_email" };
 
       // Handle 6-digit OTP code
       const otpPattern = /^\d{6}$/;
@@ -397,7 +392,7 @@ if (shouldInitialize) {
           // Complete email linking with OTP
           try {
             const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
-            const response = await axios.post<CompleteLinkingResponse>(
+            const response = await axios.post(
               `${API_URL}/api/telegram/complete-email-linking`,
               {
                 otpCode: text.trim(),
@@ -409,7 +404,7 @@ if (shouldInitialize) {
               }
             );
 
-            if (response.data.success && response.data.user) {
+            if (response.data.success) {
               userStates.delete(chatId); // Clear state
 
               if (bot) {
@@ -433,9 +428,7 @@ if (shouldInitialize) {
               if (bot) {
                 await bot.sendMessage(
                   chatId,
-                  `❌ *Verification Failed*\n\n${
-                    response.data.message || "Unknown error"
-                  }\n\n` +
+                  `❌ *Verification Failed*\n\n${response.data.message}\n\n` +
                     `💡 *Try again:* Send your email address to restart the process.`,
                   { parse_mode: "Markdown" }
                 );
@@ -450,33 +443,29 @@ if (shouldInitialize) {
 
             let errorMessage = "❌ *Verification Failed*\n\n";
 
-            // Type-safe error handling
-            if (axios.isAxiosError(error)) {
-              const axiosError = error as AxiosError<{ message?: string }>;
-              if (axiosError.response?.data?.message) {
-                if (axiosError.response.data.message.includes("Invalid OTP")) {
-                  errorMessage +=
-                    "❌ *Invalid or Expired OTP*\n\n" +
-                    "The OTP code is either invalid, expired, or already used.\n\n" +
-                    "💡 *Solution:*\n" +
-                    "1. Go to your Reeru dashboard\n" +
-                    "2. Generate a new OTP code\n" +
-                    "3. Send the new code here";
-                } else if (
-                  axiosError.response.data.message.includes(
-                    "verification session expired"
-                  )
-                ) {
-                  errorMessage +=
-                    "⏰ *Session Expired*\n\n" +
-                    "Your verification session has expired.\n\n" +
-                    "💡 *Solution:* Send your email address again to restart.";
-                  userStates.delete(chatId);
-                } else {
-                  errorMessage += axiosError.response.data.message;
-                }
+            // Try to access error.response?.data?.message if possible
+            const err = error as { response?: { data?: { message?: string } } };
+            if (err.response?.data?.message) {
+              if (err.response.data.message.includes("Invalid OTP")) {
+                errorMessage +=
+                  "❌ *Invalid or Expired OTP*\n\n" +
+                  "The OTP code is either invalid, expired, or already used.\n\n" +
+                  "💡 *Solution:*\n" +
+                  "1. Go to your Reeru dashboard\n" +
+                  "2. Generate a new OTP code\n" +
+                  "3. Send the new code here";
+              } else if (
+                err.response.data.message.includes(
+                  "verification session expired"
+                )
+              ) {
+                errorMessage +=
+                  "⏰ *Session Expired*\n\n" +
+                  "Your verification session has expired.\n\n" +
+                  "💡 *Solution:* Send your email address again to restart.";
+                userStates.delete(chatId);
               } else {
-                errorMessage += "Unable to verify OTP. Please try again.";
+                errorMessage += err.response.data.message;
               }
             } else {
               errorMessage += "Unable to verify OTP. Please try again.";
@@ -511,7 +500,7 @@ if (shouldInitialize) {
 
         try {
           const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
-          const response = await axios.post<EmailLinkingResponse>(
+          const response = await axios.post(
             `${API_URL}/api/telegram/initiate-email-linking`,
             {
               email: text.trim(),
@@ -525,7 +514,7 @@ if (shouldInitialize) {
             }
           );
 
-          if (response.data.success && response.data.user) {
+          if (response.data.success) {
             // Set user state to waiting for OTP
             userStates.set(chatId, {
               step: "waiting_otp",
@@ -556,9 +545,7 @@ if (shouldInitialize) {
             if (bot) {
               await bot.sendMessage(
                 chatId,
-                `❌ *Email Verification Failed*\n\n${
-                  response.data.message || "Unknown error"
-                }`,
+                `❌ *Email Verification Failed*\n\n${response.data.message}`,
                 { parse_mode: "Markdown" }
               );
             }
@@ -571,53 +558,45 @@ if (shouldInitialize) {
           }
 
           let errorMessage = "❌ *Email Verification Failed*\n\n";
+          const err = error as {
+            response?: { data?: { message?: string; errorCode?: string } };
+          };
+          const errorCode = err.response?.data?.errorCode;
 
-          if (axios.isAxiosError(error)) {
-            const axiosError = error as AxiosError<{
-              message?: string;
-              errorCode?: string;
-            }>;
-            const errorCode = axiosError.response?.data?.errorCode;
+          switch (errorCode) {
+            case "email_not_found":
+              errorMessage +=
+                "📧 *Email Not Found*\n\n" +
+                "The email you entered is not registered in Reeru system.\n\n" +
+                "💡 *Solutions:*\n" +
+                "• Make sure email is registered in Reeru\n" +
+                "• Check spelling carefully\n" +
+                "• Register new account if needed";
+              break;
 
-            switch (errorCode) {
-              case "email_not_found":
-                errorMessage +=
-                  "📧 *Email Not Found*\n\n" +
-                  "The email you entered is not registered in Reeru system.\n\n" +
-                  "💡 *Solutions:*\n" +
-                  "• Make sure email is registered in Reeru\n" +
-                  "• Check spelling carefully\n" +
-                  "• Register new account if needed";
-                break;
+            case "telegram_already_linked_to_other_user":
+              errorMessage +=
+                "🔗 *Telegram Already Connected*\n\n" +
+                "This Telegram account is already linked to another user.\n\n" +
+                "💡 *Solutions:*\n" +
+                "• Use a different Telegram account\n" +
+                "• Contact support to disconnect old connection";
+              break;
 
-              case "telegram_already_linked_to_other_user":
-                errorMessage +=
-                  "🔗 *Telegram Already Connected*\n\n" +
-                  "This Telegram account is already linked to another user.\n\n" +
-                  "💡 *Solutions:*\n" +
-                  "• Use a different Telegram account\n" +
-                  "• Contact support to disconnect old connection";
-                break;
+            case "email_already_linked_to_other_telegram":
+              errorMessage +=
+                "📱 *Email Already Connected*\n\n" +
+                "This email is already linked to another Telegram account.\n\n" +
+                "💡 *Solutions:*\n" +
+                "• Use the previously connected Telegram account\n" +
+                "• Contact support to disconnect old connection";
+              break;
 
-              case "email_already_linked_to_other_telegram":
-                errorMessage +=
-                  "📱 *Email Already Connected*\n\n" +
-                  "This email is already linked to another Telegram account.\n\n" +
-                  "💡 *Solutions:*\n" +
-                  "• Use the previously connected Telegram account\n" +
-                  "• Contact support to disconnect old connection";
-                break;
-
-              default:
-                errorMessage += `${
-                  axiosError.response?.data?.message ||
-                  (error instanceof Error ? error.message : "Unknown error")
-                }\n\n💡 Please try again or contact support.`;
-            }
-          } else {
-            errorMessage += `${
-              error instanceof Error ? error.message : "Unknown error"
-            }\n\n💡 Please try again or contact support.`;
+            default:
+              errorMessage += `${
+                err.response?.data?.message ||
+                (error instanceof Error ? error.message : "Unknown error")
+              }\n\n💡 Please try again or contact support.`;
           }
 
           if (bot) {
@@ -694,7 +673,7 @@ if (shouldInitialize) {
       try {
         // Check if user is linked by trying to get user info
         const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
-        const response = await axios.post<CheckStatusResponse>(
+        const response = await axios.post(
           `${API_URL}/api/telegram/check-status`,
           { chatId: chatId },
           {
@@ -751,7 +730,7 @@ if (shouldInitialize) {
 
       try {
         const API_URL = process.env.API_BASE_URL || "http://localhost:3000";
-        const response = await axios.post<UnlinkResponse>(
+        const response = await axios.post(
           `${API_URL}/api/telegram/unlink`,
           { chatId: chatId },
           {
@@ -760,7 +739,7 @@ if (shouldInitialize) {
           }
         );
 
-        if (response.data.success && response.data.user && bot) {
+        if (response.data.success && bot) {
           await bot.sendMessage(
             chatId,
             `✅ *Account Disconnected Successfully!*\n\n` +
@@ -792,15 +771,9 @@ if (shouldInitialize) {
         }
 
         let errorMessage = "❌ *Failed to Disconnect Account*\n\n";
-
-        if (axios.isAxiosError(error)) {
-          const axiosError = error as AxiosError<{ message?: string }>;
-          if (axiosError.response?.data?.message) {
-            errorMessage += axiosError.response.data.message;
-          } else {
-            errorMessage +=
-              "Unable to process unlink request. Please try again.";
-          }
+        const err = error as { response?: { data?: { message?: string } } };
+        if (err.response?.data?.message) {
+          errorMessage += err.response.data.message;
         } else {
           errorMessage += "Unable to process unlink request. Please try again.";
         }
