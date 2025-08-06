@@ -16,21 +16,18 @@ import {
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 // Constants
-const CACHE_TTL = 5 * 24 * 60 * 60; // 5 days in seconds
-const USER_HISTORY_TTL = 5 * 24 * 60 * 60; // 5 days for seen videos (match your requirement)
+const CACHE_TTL = 5 * 24 * 60 * 60; // 5 days
+const USER_HISTORY_TTL = 5 * 24 * 60 * 60; // 5 days for seen videos
 const DAILY_REFRESH_LIMIT = 2; // Initial load + 1 refresh = 10 videos total
 const VIDEOS_PER_REQUEST = 5;
 const MIN_DURATION_MINUTES = 30;
-const MAX_DURATION_MINUTES = 150; // Maximum 2.5 hours
+const MAX_DURATION_MINUTES = 150; // 2.5 hours
 const MIN_VIEW_COUNT = 100000;
 const MAX_API_RESULTS = 40;
 const POOL_REFRESH_THRESHOLD = 10; // Minimum videos needed in pool
 const MAX_SEARCH_ATTEMPTS = 3; // Maximum attempts to find new videos
 const MIN_ACCEPTABLE_VIDEOS = 3; // Minimum videos to return (relax if needed)
 
-/**
- * Decode HTML entities in text
- */
 function decodeHtmlEntities(text: string): string {
   const entities: HtmlEntities = {
     "&amp;": "&",
@@ -49,38 +46,31 @@ function decodeHtmlEntities(text: string): string {
     return entities[entity] || entity;
   });
 }
-/**
- * Check if content is likely from India based on various indicators
- */
+
 function isLikelyIndianContent(video: VideoSearchResult): boolean {
   const indicators = [
-    // Hindi/Indian language indicators
     "hindi",
     "bollywood",
     "desi",
     "bharat",
     "hindustan",
-    // Common Indian names/terms
     "sharma",
     "gupta",
     "singh",
     "kumar",
     "verma",
     "patel",
-    // Indian cities
     "mumbai",
     "delhi",
     "bangalore",
     "kolkata",
     "chennai",
     "hyderabad",
-    // Common Indian YouTube channel patterns
     "india",
     "indian",
     "bharat",
     "desi",
     "hindustani",
-    // Hindi words commonly in titles
     "aur",
     "hai",
     "mein",
@@ -106,20 +96,15 @@ function isLikelyIndianContent(video: VideoSearchResult): boolean {
     /[\u0D00-\u0D7F]/, // Malayalam
   ];
 
-  // Check for any Indian script
   const hasIndianScript = indianScripts.some((script) =>
     script.test(video.title + video.creator + (video.description || ""))
   );
 
   if (hasIndianScript) return true;
 
-  // Check for indicators
   return indicators.some((indicator) => textToCheck.includes(indicator));
 }
 
-/**
- * Generate a cache key for content/language combination
- */
 function getPoolKey(
   contentPreference: string,
   languagePreference: string
@@ -129,21 +114,15 @@ function getPoolKey(
   return `pool:${content}${lang}`;
 }
 
-/**
- * Get user-specific keys
- */
 function getUserKeys(userId: string) {
   const today = new Date().toISOString().split("T")[0];
   return {
     refreshCount: `user:${userId}:refresh:${today}`,
     seenVideos: `user:${userId}:seen`,
-    todayCache: `user:${userId}:today:${today}`, // Cache today's delivered videos
+    todayCache: `user:${userId}:today:${today}`,
   };
 }
 
-/**
- * Acquire lock to prevent race conditions
- */
 async function acquireUserLock(
   userId: string,
   ttl: number = 10
@@ -153,17 +132,11 @@ async function acquireUserLock(
   return result === "OK";
 }
 
-/**
- * Release user lock
- */
 async function releaseUserLock(userId: string): Promise<void> {
   const lockKey = `lock:${userId}:recommendations`;
   await redis.del(lockKey);
 }
 
-/**
- * Validate and fix TTL for seen videos
- */
 async function validateSeenVideos(userId: string): Promise<void> {
   const { seenVideos } = getUserKeys(userId);
   const ttl = await redis.ttl(seenVideos);
@@ -174,9 +147,6 @@ async function validateSeenVideos(userId: string): Promise<void> {
   }
 }
 
-/**
- * Get or set today's cache for user (handles the reroll scenario)
- */
 async function getUserTodayCache(userId: string): Promise<UserDayCache | null> {
   const { todayCache } = getUserKeys(userId);
   const cached = await redis.get(todayCache);
@@ -201,7 +171,6 @@ async function setUserTodayCache(
     date: new Date().toISOString().split("T")[0],
   };
 
-  // Expire at end of day
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
@@ -210,9 +179,6 @@ async function setUserTodayCache(
   await redis.set(todayCache, JSON.stringify(cache), "EX", ttl);
 }
 
-/**
- * Check if user can refresh (max 2 times per day)
- */
 async function canUserRefresh(
   userId: string
 ): Promise<{ canRefresh: boolean; count: number }> {
@@ -226,9 +192,6 @@ async function canUserRefresh(
   };
 }
 
-/**
- * Increment user's daily refresh count
- */
 async function incrementRefreshCount(userId: string): Promise<void> {
   const { refreshCount } = getUserKeys(userId);
   const current = await redis.incr(refreshCount);
@@ -242,18 +205,12 @@ async function incrementRefreshCount(userId: string): Promise<void> {
   }
 }
 
-/**
- * Get videos the user has seen in the last 5 days
- */
 async function getUserSeenVideos(userId: string): Promise<Set<string>> {
   const { seenVideos } = getUserKeys(userId);
   const videos = await redis.smembers(seenVideos);
   return new Set(videos);
 }
 
-/**
- * Mark videos as seen by the user
- */
 async function markVideosAsSeen(
   userId: string,
   videoIds: string[]
@@ -266,9 +223,6 @@ async function markVideosAsSeen(
   }
 }
 
-/**
- * Get cached video pool
- */
 async function getCachedPool(poolKey: string): Promise<VideoPool | null> {
   const cached = await redis.get(poolKey);
   if (!cached) return null;
@@ -281,9 +235,6 @@ async function getCachedPool(poolKey: string): Promise<VideoPool | null> {
   }
 }
 
-/**
- * Save video pool to cache
- */
 async function cacheVideoPool(
   poolKey: string,
   videos: CachedVideo[],
@@ -643,7 +594,7 @@ Duration: ${video.durationMinutes} minutes
 
 Provide a compelling 2-3 sentence explanation covering:
 1. What makes this content valuable
-2. Key topics or insights covered
+2. Key people in the video covered
 3. Why the high view count indicates quality
 
 Be specific and enthusiastic. Response only with the reasoning text.`;
