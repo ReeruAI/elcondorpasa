@@ -3,7 +3,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import axios from "axios";
 import type { CallbackQuery, Message } from "node-telegram-bot-api";
-import type CronServiceType from "@/lib/cronService";
+import type CronService from "@/lib/cronService";
 
 // Prevent initialization during build or in non-runtime environments
 const shouldInitialize =
@@ -13,7 +13,7 @@ const shouldInitialize =
   !process.env.NEXT_PHASE; // Prevent during build phases
 
 let bot: TelegramBot | null = null;
-let cronService: CronServiceType | null = null;
+let cronService: CronService | null = null;
 
 if (shouldInitialize) {
   const token = process.env.TELEGRAM_BOT_TOKEN as string;
@@ -51,25 +51,10 @@ if (shouldInitialize) {
       const API_URL = `${
         process.env.API_BASE_URL || "http://localhost:3000"
       }/api/klap`;
-      // use userId for tracking purposes
-      console.log(
-        `📹 Processing video for chatId: ${chatId}, userId: ${userId}`
-      );
-      try {
-        // Send initial processing message
-        if (bot) {
-          await bot.sendMessage(
-            chatId,
-            `🎬 *Generating Short/Reel*\n\n` +
-              `Processing video:\n${videoUrl}\n\n` +
-              `⏳ This may take a moment. We'll notify you when it's ready!`,
-            {
-              parse_mode: "Markdown",
-            }
-          );
-        }
+      let messageId: number | undefined;
+      let lastProgress = 0;
 
-        // Make request to backend and wait for final result
+      try {
         const response = await fetch(API_URL, {
           method: "POST",
           headers: {
@@ -83,83 +68,226 @@ if (shouldInitialize) {
           throw new Error(`API responded with status: ${response.status}`);
         }
 
-        // Read the entire response (not streaming)
+        if (userId) {
+          console.log(`📊 Processing video for user ${userId}...`);
+        }
+
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        let finalData = null;
+
         if (!reader) {
           throw new Error("No response body");
         }
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+
           buffer += decoder.decode(value, { stream: true });
-        }
-        // Parse all SSE lines and get the last one
-        const lines = buffer.split("\n").filter((l) => l.startsWith("data: "));
-        if (lines.length > 0) {
-          try {
-            finalData = JSON.parse(lines[lines.length - 1].slice(6).trim());
-          } catch (e) {
-            console.error("❌ Failed to parse final data:", e);
-            finalData = null;
-          }
-        }
-        // Send final message
-        if (
-          finalData &&
-          finalData.status === "completed" &&
-          finalData.short &&
-          bot
-        ) {
-          const short = finalData.short;
-          const completionMessage =
-            `✅ *Video Ready!*\n\n` +
-            `🎬 *Title:* ${short.title}\n` +
-            `🎯 *Virality Score:* ${short.virality_score}/100\n` +
-            `💡 *Analysis:*\n_${short.description}_\n\n` +
-            `📝 *Caption suggestion:*\n${
-              short.captions?.tiktok || short.captions || "No caption generated"
-            }\n\n` +
-            `🪙 *Tokens remaining:* ${finalData.tokens_remaining || 0}\n\n` +
-            `🌐 *View your short:* [Open Dashboard](${
-              process.env.API_BASE_URL || "http://localhost:3000"
-            }/your-clip)\n` +
-            `🔗 *Original:* [View on YouTube](${videoUrl})`;
-          await bot.sendMessage(chatId, completionMessage, {
-            parse_mode: "Markdown",
-            disable_web_page_preview: true,
-          });
-          await bot.sendMessage(
-            chatId,
-            `🎉 *Success!*\n\n` +
-              `Your short "${short.title}" is ready!\n\n` +
-              `📱 *View & Download:* [${
-                process.env.API_BASE_URL || "http://localhost:3000"
-              }/your-clip](${
-                process.env.API_BASE_URL || "http://localhost:3000"
-              }/your-clip)\n\n` +
-              `💾 *Direct download:* ${short.download_url}`,
-            {
-              parse_mode: "Markdown",
-              disable_web_page_preview: false,
+          const lines = buffer.split("\n");
+
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr) continue;
+
+                const data = JSON.parse(jsonStr);
+                console.log("📊 Klap API Update:", data.status, data.message);
+
+                if (
+                  data.progress !== undefined &&
+                  data.progress !== lastProgress
+                ) {
+                  const progressBar =
+                    "█".repeat(Math.floor(data.progress / 10)) +
+                    "░".repeat(10 - Math.floor(data.progress / 10));
+
+                  let statusEmoji = "⏳";
+                  if (data.status === "creating_task") statusEmoji = "🚀";
+                  else if (data.status === "processing") statusEmoji = "🔄";
+                  else if (data.status === "exporting_short")
+                    statusEmoji = "📦";
+                  else if (data.status === "completed") statusEmoji = "✅";
+                  else if (data.status === "error") statusEmoji = "❌";
+
+                  const progressMessage =
+                    `${statusEmoji} *Generating Short/Reel*\n\n` +
+                    `📊 Status: ${data.message}\n` +
+                    `📈 Progress: [${progressBar}] ${data.progress}%\n\n` +
+                    `${data.task_id ? `🆔 Task ID: ${data.task_id}\n` : ""}` +
+                    `${
+                      data.tokens_remaining !== undefined
+                        ? `🪙 Tokens remaining: ${data.tokens_remaining}\n`
+                        : ""
+                    }` +
+                    `⏱️ Please wait...`;
+
+                  if (messageId && bot) {
+                    try {
+                      await bot.editMessageText(progressMessage, {
+                        chat_id: chatId,
+                        message_id: messageId,
+                        parse_mode: "Markdown",
+                      });
+                    } catch (editError: unknown) {
+                      // Message might be identical, ignore error
+                      if (editError instanceof Error) {
+                        console.error(
+                          "❌ Error editing message:",
+                          editError.message
+                        );
+                      } else {
+                        console.error("❌ Error editing message:", editError);
+                      }
+                    }
+                  } else if (bot) {
+                    const sentMessage = await bot.sendMessage(
+                      chatId,
+                      progressMessage,
+                      {
+                        parse_mode: "Markdown",
+                      }
+                    );
+                    messageId = sentMessage.message_id;
+                  }
+
+                  lastProgress = data.progress;
+                }
+
+                if (data.status === "completed" && data.short && bot) {
+                  const short = data.short;
+                  const completionMessage =
+                    `✅ *Video Ready!*\n\n` +
+                    `🎬 *Title:* ${short.title}\n` +
+                    `🎯 *Virality Score:* ${short.virality_score}/100\n` +
+                    `💡 *Analysis:*\n_${short.description}_\n\n` +
+                    `📝 *Caption suggestion:*\n${
+                      short.captions?.tiktok ||
+                      short.captions ||
+                      "No caption generated"
+                    }\n\n` +
+                    `🪙 *Tokens remaining:* ${data.tokens_remaining || 0}\n\n` +
+                    `🌐 *View your short:* [Open Dashboard](${
+                      process.env.API_BASE_URL || "http://localhost:3000"
+                    }/your-clip)\n` +
+                    `🔗 *Original:* [View on YouTube](${videoUrl})`;
+
+                  if (messageId) {
+                    await bot.editMessageText(completionMessage, {
+                      chat_id: chatId,
+                      message_id: messageId,
+                      parse_mode: "Markdown",
+                      disable_web_page_preview: true,
+                    });
+                  }
+
+                  await bot.sendMessage(
+                    chatId,
+                    `🎉 *Success!*\n\n` +
+                      `Your short "${short.title}" is ready!\n\n` +
+                      `📱 *View & Download:* [${
+                        process.env.API_BASE_URL || "http://localhost:3000"
+                      }/your-clip](${
+                        process.env.API_BASE_URL || "http://localhost:3000"
+                      }/your-clip)\n\n` +
+                      `💾 *Direct download:* ${short.download_url}`,
+                    {
+                      parse_mode: "Markdown",
+                      disable_web_page_preview: false,
+                    }
+                  );
+                }
+
+                if (data.status === "error" && bot) {
+                  let errorMessage = `❌ *Processing Failed*\n\n`;
+
+                  if (data.error_code === "video_too_long") {
+                    errorMessage +=
+                      `🎬 *Video Too Long*\n\n` +
+                      `The video you selected is too long for processing.\n\n` +
+                      `📏 *Recommendation:* Use videos shorter than 10 minutes\n` +
+                      `⏱️ *Tip:* Shorter videos (2-5 minutes) work best for creating engaging shorts!`;
+                  } else if (data.error_code === "invalid_url") {
+                    errorMessage +=
+                      `🔗 *Invalid Video URL*\n\n` +
+                      `Please make sure:\n` +
+                      `• The YouTube video is public\n` +
+                      `• The URL is correct and accessible\n` +
+                      `• The video is not age-restricted`;
+                  } else if (data.error_code === "unsupported_platform") {
+                    errorMessage +=
+                      `🚫 *Unsupported Platform*\n\n` +
+                      `Currently only YouTube videos are supported.\n` +
+                      `Please share a YouTube video URL.`;
+                  } else if (data.error_code === "fetch_shorts_failed") {
+                    errorMessage +=
+                      `📥 *Fetch Failed*\n\n` +
+                      `Your video was processed successfully, but we couldn't retrieve the shorts from Klap.\n\n` +
+                      `✅ *Good news:* Your shorts are likely ready!\n` +
+                      `🌐 *Check Klap Dashboard:* https://app.klap.app\n` +
+                      `🆔 *Project ID:* ${
+                        data.project_id || "Not available"
+                      }\n\n` +
+                      `📧 *Need help?* Contact support with the Project ID above.`;
+                  } else if (data.error_code === "no_shorts_generated") {
+                    errorMessage +=
+                      `🤔 *No Shorts Generated*\n\n` +
+                      `The AI couldn't create engaging shorts from this video.\n\n` +
+                      `This might happen when:\n` +
+                      `• Video has mostly music/no clear speech\n` +
+                      `• Content is too complex or abstract\n` +
+                      `• Video quality is too low\n\n` +
+                      `💡 *Try videos with:*\n` +
+                      `• Clear speech/dialogue\n` +
+                      `• Engaging visual content\n` +
+                      `• Educational or entertaining topics\n` +
+                      `• Good audio quality`;
+                  } else {
+                    errorMessage +=
+                      `Error: ${data.message}\n` +
+                      `${
+                        data.error_details
+                          ? `\nDetails: ${data.error_details}`
+                          : ""
+                      }`;
+                  }
+
+                  errorMessage += `\n\n💡 *Try again with a different video or contact support if the problem persists.*`;
+
+                  if (messageId) {
+                    await bot.editMessageText(errorMessage, {
+                      chat_id: chatId,
+                      message_id: messageId,
+                      parse_mode: "Markdown",
+                    });
+                  } else {
+                    await bot.sendMessage(chatId, errorMessage, {
+                      parse_mode: "Markdown",
+                    });
+                  }
+                  break;
+                }
+              } catch (parseError: unknown) {
+                if (parseError instanceof Error) {
+                  console.error("Error parsing SSE data:", parseError.message);
+                } else {
+                  console.error("Error parsing SSE data:", parseError);
+                }
+              }
             }
-          );
-        } else {
-          // Send error message if failed
-          let errorMessage = `❌ *Processing Failed*\n\n`;
-          if (finalData && finalData.message) {
-            errorMessage += `Error: ${finalData.message}\n`;
-          } else {
-            errorMessage += `Failed to process your video.\n`;
           }
-          errorMessage += `\nPlease try again later or contact support.`;
-          await bot!.sendMessage(chatId, errorMessage, {
-            parse_mode: "Markdown",
-          });
         }
       } catch (error: unknown) {
+        if (error instanceof Error) {
+          console.error("❌ Klap API Error:", error.message);
+        } else {
+          console.error("❌ Klap API Error:", error);
+        }
+
         const errorMessage =
           `❌ *Error*\n\n` +
           `Failed to process your video.\n` +
@@ -167,7 +295,14 @@ if (shouldInitialize) {
             error instanceof Error ? error.message : "Unknown error"
           }\n\n` +
           `Please try again later or contact support.`;
-        if (bot) {
+
+        if (messageId && bot) {
+          await bot.editMessageText(errorMessage, {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: "Markdown",
+          });
+        } else if (bot) {
           await bot.sendMessage(chatId, errorMessage, {
             parse_mode: "Markdown",
           });
