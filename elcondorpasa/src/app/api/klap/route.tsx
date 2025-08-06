@@ -340,7 +340,7 @@ export async function POST(request: NextRequest) {
           // 2. Poll for task completion
           let status = "processing";
           let result: PollResponse | null = null;
-          const maxRetries = 120;
+          const maxRetries = 200;
           const delay = (ms: number) =>
             new Promise((res) => setTimeout(res, ms));
 
