@@ -20,6 +20,11 @@ Users simply paste a YouTube link, and ReeruAI handles everything including smar
 <img src="./assets/ReeruAI-ResultModal.webp" width="1000">
 <img src="./assets/ReeruAI-Yourclip.webp" width="1000">
 
+## Demo Video
+
+[![Watch the video](https://img.shields.io/badge/Watch%20Video-Click%20Here-blue?style=for-the-badge)](https://drive.google.com/file/d/1z8G1vULr6Qm9XG46TdQ3YPBfGcq8YU9p/view?usp=sharing)
+[![Watch the video](https://img.shields.io/badge/Watch%20Video-Click%20Here-blue?style=for-the-badge)](https://drive.google.com/file/d/1Ee2C4NNR0dOUuJMdw3dxV4r4PSWFpXgP/view?usp=sharing)
+
 ## Tech Stack
 
 ### Frontend
